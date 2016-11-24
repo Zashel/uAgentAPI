@@ -894,107 +894,58 @@ class DefaultEventHandler(object):
     '''
     def ActiveSessionChanged(self, this, activeSessionId):
         pass
-
     def AgentAlteredMessageOfTheDay(self, this, newMessage):
         pass
-
+    def CampaignActivated(self, this, campaign): #A8: Deprecated
+        pass
+    def CampaignAlteredMessageOfTheDay(self, this, campaign, newMessage): #A8: Deprecated
+        pass
     def CampaignAvailable(self, this, campaign):
         pass
-
-    def CampaignFeatureErrorEvent(self, this, campaign,
-            requestType, progressType):
+    def CampaignClosed(self, this, campaign): #A8: Deprecated
         pass
-
-    def CampaignFeatureEvent(self, this, campaign, featureInvokedType):
+    def CampaignEnded(self, this, campaign): #A8: Deprecated
         pass
-
+    def CampaignFeatureInvoked(self, this, campaign, featureInvokedType): #A8: Deprecated
+        pass
+    def CampaignFeatureProgress(self, this, campaign, requestType, progressType): #A8: Deprecated
+        pass
+    def CampaignOpened(self, this, campaign): #A8: Deprecated
+        pass
     def CampaignSuspended(self, this, campaign):
         pass
-
     def CampaignUnavailable(self, this, campaign):
         pass
-
-    def ConnectionStateChanged(self, this, connectionState):
+    def ConnectionStateChanged(self, this, ConnectionState):
         pass
-
     def ExtensionChanged(self, this, newExtension):
         pass
-
     def ExtensionCleared(self, this):
         pass
-
     def InstanceAlteredMessageOfTheDay(self, this, newMessage):
         pass
-
-    def SessionContactLoadedEvent(self, this, sessionID, data):
+    def SessionDataEvent(self, this, sessionId, data, reason):
         pass
-
-    def SessionContactProfileUpdatedEvent(self, this, sessionID, data):
+    def SessionDataInteractionEvent(self, this, sessionId, data): #A8: Deprecated
         pass
-
-    def SessionContactScheduleUpdatedEvent(self, this, sessionID, newSchedule):
+    def SessionDataInteractionProgressEvent(self, this, sessionId, data): #A8: Deprecated
         pass
-
-    def SessionDataEvent(self, this, sessionID, data, reason):
+    def SessionDataTransactionEnded(self, this, sessionId, endReason, dataTransactionOutcome):
         pass
-
-    def SessionDataTransactionEnded(self, this, sessionID, endReason):
+    def SessionDataTransactionEnding(self, this, sessionId, endReason):
         pass
-
-    def SessionDataTransactionEnding(self, this, sessionID, endReason):
+    def SessionEmailSent(self, this, sessionId, emailId): #A8: Deprecated
         pass
-
-    def SessionEmailErrorEvent(self, this, sessionID, data):
+    def SessionEnded(self, this, sessionId): #A8: Deprecated
         pass
-
-    def SessionEmailEvent(self, this, sessionID, data):
+    def SessionPhoneEvent(self, this, sessionId, data):
         pass
-
-    def SessionEmailProgressEvent(self, this, sessionID, data):
+    def SessionPhoneProgressEvent(self, this, sessionId, data):
         pass
-
-    def SessionEmailSentEvent(self, this, sessionID, data):
+    def SessionStarted(self, this, sessionData): #A8: Deprecated
         pass
-
-    def SessionEnded(self, this, sessionID):
-        pass
-
-    def SessionIMErrorEvent(self, this, sessionID, data):
-        pass
-
-    def SessionIMEvent(self, this, sessionID, data):
-        pass
-
-    def SessionIMMessageEvent(self, this, sessionID, data):
-        pass
-
-    def SessionIMProgressEvent(self, this, sessionID, data):
-        pass
-
-    def SessionPhoneErrorEvent(self, this, sessionID, data):
-        pass
-
-    def SessionPhoneEvent(self, this, sessionID, data):
-        pass
-
-    def SessionPhoneProgressEvent(self, this, sessionID, data):
-        pass
-
-    def SessionStarted(self, this, sessiondata):
-        pass
-
-    def SessionWorkflowErrorEvent(self, this, sessionID, data):
-        pass
-
-    def SessionWorkflowEvent(self, this, sessionID, data):
-        pass
-
-    def SessionWorkflowProgressEvent(self, this, sessionID, data):
-        pass
-
     def TeamAlteredMessageOfTheDay(self, this, newMessage):
         pass
-
     def UserMessage(self, this, message):
         pass
         
