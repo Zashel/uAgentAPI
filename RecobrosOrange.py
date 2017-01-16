@@ -1,8 +1,9 @@
-import os
+﻿import os
 from importlib.machinery import SourceFileLoader
 thispath = os.path.dirname(os.path.abspath(__file__))
 Wrapper = SourceFileLoader("Wrapper", os.path.join(thispath, "Wrapper.py")).load_module()
-from zashel.utils import buscar_unidad, make_daemon, PathError
+from zashel.utils import buscar_unidad, make_daemon
+
 from zashel import modular
 import datetime
 import comtypes.client
@@ -10,10 +11,10 @@ import re
 import socket
 import json
 import base64
-import random
 import hashlib
 import io
 import struct
+
 
  #########################
 #                        #
@@ -554,25 +555,26 @@ group by
             total[factura][0] = "{},{} €".format(len(dato)>2 and dato[:-2] or "0", dato[-2:])
         return total
 
-    def get_idopen_clientes_en_gestion(self, dat_dead_line=None, *, segmento=str()):
+    def get_idopen_clientes_en_gestion(self, dat_dead_line=None, *, segmento=str(), bscs=None):
         segmento = App.verify_segmento_movil(segmento)
         dat_dead_line = App.verify_dat_dead_line(dat_dead_line)
         sql = "select id_open as IdOpen, convert(char, dat_unpaid_invoice, 103) as FechaFactura, "
-        sql += "amount_unpaid as Importe "
+        sql += "amount_unpaid as Importe, cod_bscs as Bscs "
         sql += "from dir_recobros_orange as dir "
         sql += "where typ_business_segment like ? and dat_dead_line >= ? "
         sql += "and call_status = 1 "
         sql += "order by dat_dead_line asc;"
         datos = App.execute(self, sql, (segmento, dat_dead_line))
         final = dict()
-        for dato in datos:
+        for index, dato in enumerate(datos):
             if dato.idopen != "":
-                idopen = int(dato.idopen)
-                if idopen not in final:
-                    final[idopen] = dict()
-                if dato.fechafactura not in final[idopen]:
-                    final[idopen][dato.fechafactura] = int()
-                final[idopen][dato.fechafactura] = round( float(dato.importe)*100)
+                if bscs is None or dato.bscs in bscs:
+                    idopen = int(dato.idopen)
+                    if idopen not in final:
+                        final[idopen] = dict()
+                    if dato.fechafactura not in final[idopen]:
+                        final[idopen][dato.fechafactura] = int()
+                    final[idopen][dato.fechafactura] = round( float(dato.importe)*100)
         return final
         
     def get_pagos_sobre_factura_posterior(self, dat_dead_line=None, *, segmento=str()):
@@ -588,18 +590,33 @@ group by
 
     def read_exportacion_pagos_open(self, file_):
         datos = dict()
-        with open(file_, "r") as pagos:
-            for index, pago in enumerate(pagos):
+        if isinstance(file_, list):
+            for index, pago in enumerate(file_):
                 if index > 0:
-                    fila = pago.split("\t")
-                    id_open = int(fila[1])
-                    f_fact = fila[12][:10]
-                    importe = round(float(fila[2].replace(",", "."))*100)
+                    id_open = int(pago["external_id"])
+                    f_fact = pago["f_fact"].strftime("%d/%m/%Y")
+                    try:
+                        importe = round(float(pago["imp_cobrado"].replace(",", ".")) * 100)
+                    except AttributeError:
+                        importe = round(float(pago["imp_cobrado"]) * 100)
                     if id_open not in datos:
                         datos[id_open] = dict()
                     if f_fact not in datos[id_open]:
                         datos[id_open][f_fact] = int()
                     datos[id_open][f_fact] += importe
+        else:
+            with open(file_, "r") as pagos:
+                for index, pago in enumerate(pagos):
+                    if index > 0:
+                        fila = pago.split("\t")
+                        id_open = int(fila[1])
+                        f_fact = fila[12][:10]
+                        importe = round(float(fila[2].replace(",", "."))*100)
+                        if id_open not in datos:
+                            datos[id_open] = dict()
+                        if f_fact not in datos[id_open]:
+                            datos[id_open][f_fact] = int()
+                        datos[id_open][f_fact] += importe
         return datos
 
     def get_dolphin_from_files(self, first_date, *, segmento=str()):
@@ -821,7 +838,7 @@ class EnUnidad():
         if key in self.config[self.key]:
             try:
                 return buscar_unidad(self.config[self.key][key])
-            except PathError:
+            except:
                 return None
         else:
             return None
@@ -832,7 +849,6 @@ class EnUnidad():
 # Modular Module Base  #
 #                      #
 #######################
-
 
 class ScriptModuleWrapper(object):
     def __init__(self, app):
@@ -906,6 +922,7 @@ class ScriptModuleWrapper(object):
         return modules
 
     def send(self, data, mask=False): #Make it corroutine
+        import random
         try:
             print(data)
             output = io.BytesIO()
@@ -947,6 +964,7 @@ class ScriptModuleWrapper(object):
                         return message["finish"]
         except Exception as e:
             raise #handle it, please
+            #TODO
 
     def get_script(self, module, script):
         modules = self.list_modules()

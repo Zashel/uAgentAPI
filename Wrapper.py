@@ -298,8 +298,9 @@ class SqlParser(object):
             self.cursorSQL = -1
             self.lastquery = ""
             self._sql = SqlParser.parse_sql(sql, self._bind_list)
-            if sql.strip()[0:7].lower() == "select ":
+            if self._sql.strip()[0:7].lower() == "select ":
                 self._count = self.get_count()
+            print(self._count)
             self.execute(self.sql)
             
         else:
@@ -445,7 +446,10 @@ class SqlParser(object):
     @staticmethod
     def get_where(sql):
         if " where " in sql:
-            return re.findall(r"(?<=where )([\w+ \'=<>()\.\-#:%]+)(order by [\w+ ,]+)?", sql.lower())[0]
+            if " group by " in sql:
+                return re.findall(r"(?<=where )([\w+ \'=<>()\.\-#:%]+)(group by [\w+ ,]+)?", sql.lower())[0]
+            else:
+                return re.findall(r"(?<=where )([\w+ \'=<>()\.\-#:%]+)(order by [\w+ ,]+)?", sql.lower())[0]
         else:
             return ["", ""]
             
@@ -559,9 +563,9 @@ class SqlParser(object):
         if not self.freezed:
             sql  = sql.replace("\n", " ")
             if not "select distinct " in sql.lower()[:32]:
-                columns = re.findall(r"(?<=select )([\w+ ,()\*\[\]\.\-_'<>=]+) from", sql.lower())
+                columns = re.findall(r"(?<=select )([\w+ ,()\*\[\]\.\-_'<>=/\+]+) from", sql.lower())
             else:
-                columns = re.findall(r"(?<=select distinct )([\w+ ,()\*\[\]\.\-_'<>=]+) from", sql.lower())
+                columns = re.findall(r"(?<=select distinct )([\w+ ,()\*\[\]\.\-_'<>=/\+]+) from", sql.lower())
             print(columns)
             try:
                 columns = columns[0].split(",")
@@ -588,7 +592,9 @@ class SqlParser(object):
                     else:
                         be_columns.append(column)
                 for index, column in enumerate(be_columns):
-                    if "=" in column:
+                    if "=" in column and "(" in column and (
+                                column.index("(")>column.index("=") or
+                                (")" in column and column.index(")")<column.index("="))):
                         be_columns[index] = re.findall(r"([\w ]+)=", column)[0].strip()
                 columns = be_columns
                         
@@ -665,7 +671,7 @@ class SqlParser(object):
                 "insert into " not in self.sql.lower() and 
                 "update " not in self.sql.lower()):
             self._tables = SqlParser.get_tables(self.sql)
-            #print("Aquí: "+self.sql)
+            print("Aquí: "+self.sql)
             self._columns = self.get_columns(self.sql)
             self._where = SqlParser.get_where(self.sql)
             sql = self.sql
