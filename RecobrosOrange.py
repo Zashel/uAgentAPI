@@ -501,12 +501,16 @@ group by
             hoja1 = libro.Worksheets(1)
             ini = 2
             while hoja1.Cells(ini, 1).value():
-                nif = hoja1.Cells(ini, 1).value()
-                tel = int(hoja1.Cells(ini, 2).value())
-                ini += 1
-                if not nif in telefonos:
-                    telefonos[nif] = set()
-                telefonos[nif].add(tel)
+                try:
+                    nif = hoja1.Cells(ini, 1).value()
+                    tel = int(hoja1.Cells(ini, 2).value())
+                    ini += 1
+                    if not nif in telefonos:
+                        telefonos[nif] = set()
+                    telefonos[nif].add(tel)
+                except:
+                    ini += 1
+                    continue
             libro.Close(SaveChanges=False)
         if not excelapp:
             excel.Quit()

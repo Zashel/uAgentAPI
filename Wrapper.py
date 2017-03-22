@@ -562,11 +562,15 @@ class SqlParser(object):
     def get_columns(self, sql):
         if not self.freezed:
             sql  = sql.replace("\n", " ")
-            if not "select distinct " in sql.lower()[:32]:
-                columns = re.findall(r"(?<=select )([\w+ ,()\*\[\]\.\-_'<>=/\+]+) from", sql.lower())
+            if not " from" in sql.lower():
+                columns = re.findall(r"(?<=select )([\w+ ,()\*\@\[\]\.\-_'<>=/\+]+)", sql.lower())
+                print ("not from")
             else:
-                columns = re.findall(r"(?<=select distinct )([\w+ ,()\*\[\]\.\-_'<>=/\+]+) from", sql.lower())
-            print(columns)
+                if not "select distinct " in sql.lower()[:32]:
+                    columns = re.findall(r"(?<=select )([\w+ ,()\*\@\[\]\.\-_'<>=/\+]+) from", sql.lower())
+                else:
+                    columns = re.findall(r"(?<=select distinct )([\w+ ,()\*\@\[\]\.\-_'<>=/\+]+) from", sql.lower())
+                print(columns)
             try:
                 columns = columns[0].split(",")
                 columns = [columns[x].strip() for x in range(len(columns))]
@@ -597,7 +601,7 @@ class SqlParser(object):
                                 (")" in column and column.index(")")<column.index("="))):
                         be_columns[index] = re.findall(r"([\w ]+)=", column)[0].strip()
                 columns = be_columns
-                        
+
             except:
                 print(sql)
                 print(columns)
