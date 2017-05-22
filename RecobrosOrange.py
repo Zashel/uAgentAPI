@@ -96,7 +96,9 @@ class App(Wrapper.App):
                             "importe": datos.index("importe"),
                             "comentario": datos.index("comentario"),
                             "nif": datos.index("nif"),
-                            "nombre": datos.index("nombre"),                                                        
+                            "nombre": datos.index("nombre"),
+                            "f_operacion": datos.index("fecha_operacion"),
+                            "f_valor": datos.index("fecha_valor")
                             })
                 else:
                     pago = dict()
@@ -118,7 +120,7 @@ class App(Wrapper.App):
                                 string.replace("-", ""), 
                                 string.replace(" ", "")
                                 ):
-                            for nif in re.findall(r"[A-Z]?[0-9]{5,8}[A-Z]{1}", restring.upper()):
+                            for nif in re.findall(r"[DNI]?[ ]?([XYZ]?[0-9]{5,8}[A-Z]{0,1})[ ]?", restring.upper()):
                                 indices.add(nif)
                             for cif in re.findall(r"[A-Z]{1}[0-9]{8}", restring.upper()):
                                 indices.add(cif)

@@ -1,11 +1,14 @@
 import comtypes, comtypes.client
+import os
+ALTITUDE_PATH = r"C:\Program Files (x86)\Altitude\Altitude uCI 8\Altitude uAgent Windows"
+comtypes.client.GetModule(os.path.join(ALTITUDE_PATH, "Altitude.uAgentWin.API.tlb"))
+comtypes.client.GetModule(os.path.join(ALTITUDE_PATH, "Altitude.uAgentWin.Application.API.tlb"))
+comtypes.client.GetModule(os.path.join(ALTITUDE_PATH, "Altitude.uAgentWin.Engine.Control.tlb"))
 from comtypes.gen.Altitude_uAgentWin_Engine_Control import uAgentEngineControl8 as api
 from comtypes.gen.Altitude_uAgentWin_Application_API import uAgentWindowsApplicationAPI8 as appapi
 from comtypes.gen.Altitude_uAgentWin_API import uAgentAPIEvents
 import configparser
-import os, sys
 import re
-import subprocess
 import uuid
 import shutil
 import time
