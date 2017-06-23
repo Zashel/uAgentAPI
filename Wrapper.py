@@ -851,6 +851,7 @@ class Item():
             self.column_list = column_list
         else:
             self.column_list = ["Column{}".format(str(x)) for x in range(self.fetched.columncount)]
+        self.item_column_list = list(self.column_list)
         self.column_list=[col.replace(".", "_") for col in self.column_list]
         self.total = total
         self.row = row
@@ -863,19 +864,29 @@ class Item():
             for item in self.column_list:
                 if attribute.lower() == item[0-len(attribute):].lower():
                     return self.get_row(self.row, item)
-            raise IndexError
-            
-    def __iter__(self):
-        return self
+            raise AttributeError
 
-    def __next__(self):
-        try:
-            row = self.get_row(self.row, column)
-            self._iter_index += 1
-            return row
-        except:
-            self._iter_index = 0
-            raise StopIteration
+    def __getitem__(self, item):
+        if item in self:
+            return self.__getattr__(item.replace(".", "_"))
+        else:
+            raise IndexError
+
+    def __contains__(self, item):
+        return item in self.item_column_list
+
+    def __iter__(self):
+        for key in self.item_column_list:
+            yield key, self[key]
+
+    #def __next__(self):
+        #try:
+        #    row = self.get_row(self.row, column)
+        #    self._iter_index += 1
+        #    return row
+        #except:
+        #    self._iter_index = 0
+        #    raise StopIteration
 
     def __repr__(self):
         final = "{}\n".format("-"*40)
