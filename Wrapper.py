@@ -8,6 +8,7 @@ from comtypes.gen.Altitude_uAgentWin_Engine_Control import uAgentEngineControl8 
 from comtypes.gen.Altitude_uAgentWin_Application_API import uAgentWindowsApplicationAPI8 as appapi
 from comtypes.gen.Altitude_uAgentWin_API import uAgentAPIEvents
 import configparser
+import datetime
 import re
 import uuid
 import shutil
@@ -937,7 +938,18 @@ class Item():
 #                 #
  ##################
 
-class DefaultEventHandler(object):
+class LogEventHandler():
+    def __getattr__(self, item):
+        def log(*args, **kwargs):
+            with open("log.txt", "a") as f:
+                f.write("args: ", args, "\n")
+                f.write("kwargs: ", kwargs, "\n")
+        with open("log.txt", "a") as f:
+            f.write(datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"), "\t")
+            f.write(item, "\n")
+
+
+class DefaultEventHandler():
     '''
     Default Event Handler. Nothing to do with it.
     '''
