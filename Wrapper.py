@@ -259,6 +259,7 @@ class App(object):
 
     def set_event_handler(self, handler):
         self._event_handler = comtypes.client.GetEvents(API, handler, uAgentAPIEvents)
+        comtypes.client.PumpEvents(30)
     
     def set_login_context(self, site=None, team=None, extension=None):
         if not site:
