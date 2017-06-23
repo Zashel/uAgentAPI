@@ -7,8 +7,10 @@ comtypes.client.GetModule(os.path.join(ALTITUDE_PATH, "Altitude.uAgentWin.Engine
 from comtypes.gen.Altitude_uAgentWin_Engine_Control import uAgentEngineControl8 as api
 from comtypes.gen.Altitude_uAgentWin_Application_API import uAgentWindowsApplicationAPI8 as appapi
 from comtypes.gen.Altitude_uAgentWin_API import uAgentAPIEvents
+from functools import partial
 import configparser
 import datetime
+import getpass
 import re
 import uuid
 import shutil
@@ -114,17 +116,16 @@ class App(object):
 
     def __del__(self):
         self.logout()
-        #self.parsers = None
+        # self.parsers = None
         if AppAPI and AppAPI.CanExit():
             try:
                 AppAPI.Exit()
             except:
                 pass
-                
     @property
     def is_logged(self):
         try:
-            return API.GetAgentLoginName()
+            return App.API.GetAgentLoginName()
         except:
             return False
         
@@ -135,11 +136,11 @@ class App(object):
      #############################
 
     def call_direct(self, number):
-        API.GlobalPhoneDial("={}".format(str(number)), "", "")
+        App.API.GlobalPhoneDial("={}".format(str(number)), "", "")
 
     def hang_up(self):
         try:
-            API.GlobalPhoneHangUp()
+            App.API.GlobalPhoneHangUp()
         except:
             pass
 
@@ -148,11 +149,11 @@ class App(object):
         La dejamos con la telefonía abierta porque así mola más.
         '''
         try:
-            API.CampaignOpen(campaign)
+            App.API.CampaignOpen(campaign)
         except:
             raise
         try:
-            API.CampaignSignOn(campaign)
+            App.API.CampaignSignOn(campaign)
         except:
             raise
 
@@ -161,9 +162,21 @@ class App(object):
         Ponemos el AUX en una campaña. CACA.
         '''
         try:
-            API.CampaignSetNotReady(campaign, API.GetNotReadyReasons().Index(reason))
+            App.API.CampaignSetNotReady(campaign, App.API.GetNotReadyReasons().Index(reason))
         except:
             raise
+
+    def attach(self, username=None, password=None, handler=None):
+        global API, AppAPI
+        if username is None:
+            username = getpass.getuser()
+        print(username)
+        print(password)
+        AppAPI = comtypes.client.CreateObject(appapi)
+        if AppAPI.CanAttach():
+            API = AppAPI.Attach(username, password)
+            App.API = API
+        self.set_event_handler(handler)
         
     def login(self, *, instance=None, username=None, password=None, secureconnection=None,
             setcontext=True, site=None, team=None, extension=None):
@@ -195,7 +208,7 @@ class App(object):
                 if "secureconnection" in self.config.server: secureconnection = self.config.server["secureconnection"] == "True"
                 else: secureconnection = False
             try:
-                API.Login(instance, username, password, secureconnection)
+                App.API.Login(instance, username, password, secureconnection)
             except:
                 raise
 
@@ -214,7 +227,7 @@ class App(object):
         if AppAPI and AppAPI.CanDetach():
             AppAPI.Detach()
         else:
-            API.CleanUpAgent(True)
+            App.API.CleanUpAgent(True)
             
     def execute(self, sql, bind_list=tuple()):
         sql = SqlParser(sql, bind_list)
@@ -241,7 +254,7 @@ class App(object):
                 contacts = API.FetchContactsCursor(campaign, cursor, inicial, maxim)
                 finalcontacts.append(contacts)
                 inicial+=maxim
-            API.CloseContactsCursor(campaign, cursor)
+            App.API.CloseContactsCursor(campaign, cursor)
             yield finalcontacts
 
     def set_event_handler(self, handler):
@@ -258,7 +271,7 @@ class App(object):
             if "extension" in self.config.server: extension = self.config.server["extension"]
             else: raise Exception("Falta extensión de logado")
         try:
-            API.SetLoginContext(site, team, extension)
+            App.API.SetLoginContext(site, team, extension)
         except:
             raise
 
@@ -267,7 +280,7 @@ class App(object):
         Ponemos el AUX en todas las campañas. MOLA
         '''
         try:
-            API.GlobalSetNotReady(API.GetNotReadyReasons().Index(reason))
+            App.API.GlobalSetNotReady(API.GetNotReadyReasons().Index(reason))
         except:
             raise
 
@@ -937,17 +950,6 @@ class Item():
 # Events Handler  #
 #                 #
  ##################
-
-class LogEventHandler():
-    def __getattr__(self, item):
-        def log(*args, **kwargs):
-            with open("log.txt", "a") as f:
-                f.write("args: ", args, "\n")
-                f.write("kwargs: ", kwargs, "\n")
-        with open("log.txt", "a") as f:
-            f.write(datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"), "\t")
-            f.write(item, "\n")
-
 
 class DefaultEventHandler():
     '''
