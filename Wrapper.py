@@ -1,5 +1,6 @@
 import comtypes, comtypes.client
 import os
+
 ALTITUDE_PATH = r"C:\Program Files (x86)\Altitude\Altitude uCI 8\Altitude uAgent Windows"
 comtypes.client.GetModule(os.path.join(ALTITUDE_PATH, "Altitude.uAgentWin.API.tlb"))
 comtypes.client.GetModule(os.path.join(ALTITUDE_PATH, "Altitude.uAgentWin.Application.API.tlb"))
@@ -7,10 +8,7 @@ comtypes.client.GetModule(os.path.join(ALTITUDE_PATH, "Altitude.uAgentWin.Engine
 from comtypes.gen.Altitude_uAgentWin_Engine_Control import uAgentEngineControl8 as api
 from comtypes.gen.Altitude_uAgentWin_Application_API import uAgentWindowsApplicationAPI8 as appapi
 from comtypes.gen.Altitude_uAgentWin_API import uAgentAPIEvents
-from functools import partial
 import configparser
-import datetime
-import getpass
 import re
 import uuid
 import shutil
@@ -19,6 +17,7 @@ import time
 '''
 Altitude 8 uAgent Pythonised Wrapper for Transcom.
 '''
+
 
 class Path(object):
     def __init__(self, config, base=os.environ["HOMEPATH"], extra=None):
@@ -40,7 +39,7 @@ class Path(object):
         self.homepath = os.path.abspath(os.environ["HOMEPATH"])
         self.base = finalpath
         self._config = config
-        
+
     @property
     def config(self):
         return r"{}\config.ini".format(self.base)
@@ -48,13 +47,15 @@ class Path(object):
     @property
     def download(self):
         return os.path.join(self.homepath, "downloads")
+
     @property
     def temp(self):
         temp = r"{}\temp".format(self.base)
         if not os.path.exists(temp):
             os.mkdir(temp)
+
         class Temp():
-            def __init__(self, path):           
+            def __init__(self, path):
                 folder = uuid.uuid1().hex
                 final_path = os.path.join(path, folder)
                 os.mkdir(final_path)
@@ -66,36 +67,39 @@ class Path(object):
             @property
             def path(self):
                 return self._path
-                
+
         return Temp(temp)
 
     @property
     def base_temp(self):
         return r"{}\temp".format(self.base)
 
-####################    ###   ###   ### 
-#                   #  #   # #   # #   #
-# Principal Wrapper #  ##### ####  #### 
-#                   #  #   # #     #   
- ####################  #   # #     #   
+        ####################    ###   ###   ###
+        #                   #  #   # #   # #   #
+        # Principal Wrapper #  ##### ####  ####
+        #                   #  #   # #     #
+        ####################  #   # #     #
+
 
 API = comtypes.client.CreateObject(api)
 AppAPI = None
-#Entorno
+# Entorno
 MAX_API_ROWS = API.Constants.MaxCursorFetchRows
 MAX_ROWS = MAX_API_ROWS
+
 
 class App(object):
     '''
     Principal Class of uAgentAPI.
-    '''  
+    '''
     API = API
-    ############################# 
+
+    #############################
     #                            #
     # Pre-enum class:            #
     #             QueryMatchType #
     #                            #
-     #############################
+    #############################
 
     class QueryMatchType:
         NoValue = -1
@@ -103,16 +107,16 @@ class App(object):
         AllWords = 1
         AnyWord = 2
 
-    ############################# 
-    #                            #
-    # App: __init__              #
-    #      __del__               #
-    #                            #
-     #############################
-    
+        #############################
+        #                            #
+        # App: __init__              #
+        #      __del__               #
+        #                            #
+        #############################
+
     def __init__(self, path=None, *, pathclass=Path):
-        self.config = Config(path, pathclass) # We create a 'Config' object to access the configuration
-        #self.parsers = list()
+        self.config = Config(path, pathclass)  # We create a 'Config' object to access the configuration
+        # self.parsers = list()
 
     def __del__(self):
         self.logout()
@@ -122,25 +126,26 @@ class App(object):
                 AppAPI.Exit()
             except:
                 pass
+
     @property
     def is_logged(self):
         try:
-            return App.API.GetAgentLoginName()
+            return API.GetAgentLoginName()
         except:
             return False
-        
-    ############################# 
-    #                            #
-    # App: Methods            1  #
-    #                            #
-     #############################
+
+            #############################
+            #                            #
+            # App: Methods            1  #
+            #                            #
+            #############################
 
     def call_direct(self, number):
-        App.API.GlobalPhoneDial("={}".format(str(number)), "", "")
+        API.GlobalPhoneDial("={}".format(str(number)), "", "")
 
     def hang_up(self):
         try:
-            App.API.GlobalPhoneHangUp()
+            API.GlobalPhoneHangUp()
         except:
             pass
 
@@ -149,11 +154,11 @@ class App(object):
         La dejamos con la telefonía abierta porque así mola más.
         '''
         try:
-            App.API.CampaignOpen(campaign)
+            API.CampaignOpen(campaign)
         except:
             raise
         try:
-            App.API.CampaignSignOn(campaign)
+            API.CampaignSignOn(campaign)
         except:
             raise
 
@@ -162,36 +167,28 @@ class App(object):
         Ponemos el AUX en una campaña. CACA.
         '''
         try:
-            App.API.CampaignSetNotReady(campaign, App.API.GetNotReadyReasons().Index(reason))
+            API.CampaignSetNotReady(campaign, API.GetNotReadyReasons().Index(reason))
         except:
             raise
 
-    def attach(self, username=None, password=None, handler=None):
-        global API, AppAPI
-        if username is None:
-            username = getpass.getuser()
-        print(username)
-        print(password)
-        AppAPI = comtypes.client.CreateObject(appapi)
-        if AppAPI.CanAttach():
-            API = AppAPI.Attach(username, password)
-            App.API = API
-        self.set_event_handler(handler)
-        
     def login(self, *, instance=None, username=None, password=None, secureconnection=None,
-            setcontext=True, site=None, team=None, extension=None):
+              setcontext=True, site=None, team=None, extension=None):
         global API, AppAPI
         '''
         First we validate if uAgent is Logged and, if it is true, attach to it.
-        Elsehow login to the server. If setcontext is True, it will setted as given 
+        Elsehow login to the server. If setcontext is True, it will setted as given
         "site", "team" and "extension".
         '''
         if not username:
-            if "username" in self.config.server: username = self.config.server["username"]
-            else: raise Exception("Falta nombre de usuario")
+            if "username" in self.config.server:
+                username = self.config.server["username"]
+            else:
+                raise Exception("Falta nombre de usuario")
         if not password:
-            if "password" in self.config.server: password = self.config.server["password"]
-            else: password = None
+            if "password" in self.config.server:
+                password = self.config.server["password"]
+            else:
+                password = None
         AppAPI = comtypes.client.CreateObject(appapi)
         if AppAPI.CanAttach():
             API = AppAPI.Attach(username, password)
@@ -199,21 +196,25 @@ class App(object):
         else:
             AppAPI.Exit()
             AppAPI = None
-            #API = comtypes.client.CreateObject(api)
-            #Verificamos los datos para control de excepciones
+            # API = comtypes.client.CreateObject(api)
+            # Verificamos los datos para control de excepciones
             if not instance:
-                if "instance" in self.config.server: instance = self.config.server["instance"]
-                else: raise Exception("Falta nombre de la instancia")
+                if "instance" in self.config.server:
+                    instance = self.config.server["instance"]
+                else:
+                    raise Exception("Falta nombre de la instancia")
             if secureconnection == None:
-                if "secureconnection" in self.config.server: secureconnection = self.config.server["secureconnection"] == "True"
-                else: secureconnection = False
+                if "secureconnection" in self.config.server:
+                    secureconnection = self.config.server["secureconnection"] == "True"
+                else:
+                    secureconnection = False
             try:
-                App.API.Login(instance, username, password, secureconnection)
+                API.Login(instance, username, password, secureconnection)
             except:
                 raise
 
-            #Si está definido el contexto, lo implicamos directamente.
-            #¿Para qué esperar?
+            # Si está definido el contexto, lo implicamos directamente.
+            # ¿Para qué esperar?
             if setcontext:
                 try:
                     self.set_login_context(site=site, team=team, extension=extension)
@@ -222,25 +223,25 @@ class App(object):
         self.set_event_handler(DefaultEventHandler())
 
     def logout(self):
-        #for sql in self.parsers:
-            #del(sql)
+        # for sql in self.parsers:
+        # del(sql)
         if AppAPI and AppAPI.CanDetach():
             AppAPI.Detach()
         else:
-            App.API.CleanUpAgent(True)
-            
+            API.CleanUpAgent(True)
+
     def execute(self, sql, bind_list=tuple()):
         sql = SqlParser(sql, bind_list)
-        #self.parsers.append(sql)
+        # self.parsers.append(sql)
         return sql
-            
-    ############################# 
-    #                            #
-    # App: Methods            2  #
-    #                            #
-     #############################     
 
-    def search_contacts(self, campaign, sqlwhere): #Bullshit
+        #############################
+        #                            #
+        # App: Methods            2  #
+        #                            #
+        #############################
+
+    def search_contacts(self, campaign, sqlwhere):  # Bullshit
         '''
         Returns a list with 50 contacts per item
         '''
@@ -253,26 +254,31 @@ class App(object):
             for counter in range(5):
                 contacts = API.FetchContactsCursor(campaign, cursor, inicial, maxim)
                 finalcontacts.append(contacts)
-                inicial+=maxim
-            App.API.CloseContactsCursor(campaign, cursor)
+                inicial += maxim
+            API.CloseContactsCursor(campaign, cursor)
             yield finalcontacts
 
     def set_event_handler(self, handler):
         self._event_handler = comtypes.client.GetEvents(API, handler, uAgentAPIEvents)
-        comtypes.client.PumpEvents(30)
-    
+
     def set_login_context(self, site=None, team=None, extension=None):
         if not site:
-            if "site" in self.config.server: site = self.config.server["site"]
-            else: site="Madrid"
+            if "site" in self.config.server:
+                site = self.config.server["site"]
+            else:
+                site = "Madrid"
         if not team:
-            if "team" in self.config.server: team = self.config.server["team"]
-            else: team = ""
+            if "team" in self.config.server:
+                team = self.config.server["team"]
+            else:
+                team = ""
         if not extension:
-            if "extension" in self.config.server: extension = self.config.server["extension"]
-            else: raise Exception("Falta extensión de logado")
+            if "extension" in self.config.server:
+                extension = self.config.server["extension"]
+            else:
+                raise Exception("Falta extensión de logado")
         try:
-            App.API.SetLoginContext(site, team, extension)
+            API.SetLoginContext(site, team, extension)
         except:
             raise
 
@@ -281,27 +287,29 @@ class App(object):
         Ponemos el AUX en todas las campañas. MOLA
         '''
         try:
-            App.API.GlobalSetNotReady(API.GetNotReadyReasons().Index(reason))
+            API.GlobalSetNotReady(API.GetNotReadyReasons().Index(reason))
         except:
             raise
 
-################    ####  ###  #      ###   ###   ###   ####  ####  ###
-#               #  #     #   # #     #   # #   # #   # #     #     #   #
-# Parser of SQL #  ##### #   # #     ####  ##### ####  ##### ###   ####
-#               #      # #  ## #     #     #   # #  #      # #     #  # 
- ################  ####   ####  #### #     #   # #   # ####   #### #   #
+            ################    ####  ###  #      ###   ###   ###   ####  ####  ###
+            #               #  #     #   # #     #   # #   # #   # #     #     #   #
+            # Parser of SQL #  ##### #   # #     ####  ##### ####  ##### ###   ####
+            #               #      # #  ## #     #     #   # #  #      # #     #  #
+            ################  ####   ####  #### #     #   # #   # ####   #### #   #
+
 
 class SqlParser(object):
     '''
     Parser of the SQL
     '''
-    ############################# 
+
+    #############################
     #                            #
     # SqlParser: __init__        #
     #            __del__         #
     #                            #
-     #############################
-    
+    #############################
+
     def __init__(self, sql, bind_list=tuple()):
         self._freezed = False
         self._count = int()
@@ -320,30 +328,30 @@ class SqlParser(object):
                 self._count = self.get_count()
             print(self._count)
             self.execute(self.sql)
-            
+
         else:
             raise Exception("No seas malo")
 
     def __del__(self):
         if not self.freezed:
             self.close_cursor()
-            
-    ############################# 
-    #                            #
-    # SqlParser: __getitem__     #
-    #            __iter__        #
-    #            __getattr__     #
-    #                            #
-     #############################
+
+            #############################
+            #                            #
+            # SqlParser: __getitem__     #
+            #            __iter__        #
+            #            __getattr__     #
+            #                            #
+            #############################
 
     def __getitem__(self, key):
-        if key<self.count:
+        if key < self.count:
             try:
-                page = int(key/MAX_ROWS)+1
-                subkey = key - ((page-1)*MAX_ROWS)
+                page = int(key / MAX_ROWS) + 1
+                subkey = key - ((page - 1) * MAX_ROWS)
                 if page not in self.items:
                     data = self.fetch_page(page)
-                    #item = Item(data, self.columns, subkey)
+                    # item = Item(data, self.columns, subkey)
                     return self.items[page].set_row(key)
                 else:
                     return self.items[page].set_row(key)
@@ -360,7 +368,7 @@ class SqlParser(object):
         self._iter_index += 1
         value = None
         try:
-            #print(now)
+            # print(now)
             value = self[now]
         except:
             self._iter_index = int()
@@ -373,21 +381,21 @@ class SqlParser(object):
                 def __init__(self, parser, index):
                     self.parser = parser
                     self.index = index
-                    
+
                 def __call__(self, value, method=App.QueryMatchType.NoValue):
                     return self.parser.get_index(self.index, value, method)
-                    
-            return Index(self,attribute)
+
+            return Index(self, attribute)
 
         else:
             super().__getattr__(self, attribute)
-            
 
-    ############################# 
-    #                            #
-    # SqlParser: Properties      #
-    #                            #
-     #############################
+
+            #############################
+            #                            #
+            # SqlParser: Properties      #
+            #                            #
+            #############################
 
     @property
     def columns(self):
@@ -412,8 +420,8 @@ class SqlParser(object):
     @property
     def pages(self):
         real = self.count / MAX_ROWS
-        part = real-int(real)
-        return int(real) + (part>0 and 1 or 0)
+        part = real - int(real)
+        return int(real) + (part > 0 and 1 or 0)
 
     @property
     def sql(self):
@@ -442,23 +450,23 @@ class SqlParser(object):
         return self._where
 
 
-    ############################# 
-    #                            #
-    # SqlParser: Static Methods  #
-    #                            #
-     #############################    
+        #############################
+        #                            #
+        # SqlParser: Static Methods  #
+        #                            #
+        #############################
 
     @staticmethod
     def get_tables(sql):
         tablas = re.findall(r"(from |[\w]+ join )([\w_\.]+)( as [\w_\.]+)?", sql.lower())
-        #print(tablas)
+        # print(tablas)
         tablas_final = dict()
         for tabla in tablas:
-            if tabla[2]!=str():
+            if tabla[2] != str():
                 tablas_final[tabla[1]] = tabla[2].replace(" as ", "")
             else:
                 tablas_final[tabla[1]] = tabla[1]
-        #print(tablas_final)
+        # print(tablas_final)
         return tablas_final
 
     @staticmethod
@@ -470,7 +478,7 @@ class SqlParser(object):
                 return re.findall(r"(?<=where )([\w+ \'=<>()\.\-#:%]+)(order by [\w+ ,]+)?", sql.lower())[0]
         else:
             return ["", ""]
-            
+
     @staticmethod
     def parse_sql(sql, bind_list=tuple()):
         sql = sql.replace("\n", " ")
@@ -479,28 +487,30 @@ class SqlParser(object):
         sql_final = str()
         if len(bind_list) > 0:
             for index, piece in enumerate(sql_pieces):
-                if index < len(sql_pieces)-1:
+                if index < len(sql_pieces) - 1:
                     if "like" in piece:
-                        sql_final += "{}'%{}%'".format(piece, str(bind_list[index]).replace("'", "''").replace("\"", "\"\""))
+                        sql_final += "{}'%{}%'".format(piece,
+                                                       str(bind_list[index]).replace("'", "''").replace("\"", "\"\""))
                     else:
-                        sql_final += "{}'{}'".format(piece, str(bind_list[index]).replace("'", "''").replace("\"", "\"\""))
+                        sql_final += "{}'{}'".format(piece,
+                                                     str(bind_list[index]).replace("'", "''").replace("\"", "\"\""))
                 else:
                     sql_final += piece
-        if sql_final==str():
+        if sql_final == str():
             sql_final = sql
-        #print(sql_final)
+        # print(sql_final)
         return sql_final
 
-    ############################# 
-    #                            #
-    # SqlParser: Class Methods 1 #
-    #                            #
-     ############################# 
+        #############################
+        #                            #
+        # SqlParser: Class Methods 1 #
+        #                            #
+        #############################
 
     def close_cursor(self):
         if not self.freezed and self.cursorSQL != -1:
             API.CloseSQLCursor(self.cursorSQL)
-            #print("Closed {} cursor".format(str(self.cursorSQL)))
+            # print("Closed {} cursor".format(str(self.cursorSQL)))
         elif self.freezed:
             raise Exception("No se puede cerrar un cursor ya cerrado.")
 
@@ -511,11 +521,11 @@ class SqlParser(object):
                     self.cursorSQL = API.OpenSqlCursor(self.cursorSQL, sql, self.lastquery)
                     break
                 except:
-                    #print("Cursor: {}\nSql: {}\nLastQuery: {}".format(self.cursorSQL, sql, self.lastquery))
+                    # print("Cursor: {}\nSql: {}\nLastQuery: {}".format(self.cursorSQL, sql, self.lastquery))
                     if x == 4: raise
                     time.sleep(1)
             self.lastquery = sql
-            
+
         else:
             raise Exception("No se puede ejecutar nada con el cursor cerrado.")
 
@@ -524,11 +534,11 @@ class SqlParser(object):
         Returns the indicated page. Starts by 1.
         '''
         if not self.freezed and not page in self.items:
-            inicial = (page-1)*MAX_ROWS
+            inicial = (page - 1) * MAX_ROWS
             data = API.FetchSqlCursor(self.cursorSQL, inicial, MAX_ROWS)
-            #print("Fetched {} rows in page {}".format(str(data.rowcount), str(page)))
+            # print("Fetched {} rows in page {}".format(str(data.rowcount), str(page)))
             if save:
-                item = Item(data, self.columns, (page-1)*MAX_ROWS, self.count)
+                item = Item(data, self.columns, (page - 1) * MAX_ROWS, self.count)
                 self._items[page] = item
             return data
         elif page in self.items:
@@ -546,11 +556,11 @@ class SqlParser(object):
             inicial = 0
             while total > 0:
                 fetched = API.FetchSqlCursor(self.cursorSQL, inicial, MAX_ROWS)
-                #print("Fetched {} rows in page {}".format(str(fetched.rowcount), str(page)))
+                # print("Fetched {} rows in page {}".format(str(fetched.rowcount), str(page)))
                 total = fetched.RowCount
                 inicial += MAX_ROWS
                 if save:
-                    item = Item(fetched, self.columns, (page-1)*MAX_ROWS, self.count)
+                    item = Item(fetched, self.columns, (page - 1) * MAX_ROWS, self.count)
                     self._items[page] = item
                 page += 1
                 yield fetched
@@ -566,23 +576,23 @@ class SqlParser(object):
             import datetime
             ahora = datetime.datetime.now()
             for x in range(self.pages):
-                self.fetch_page(x+1)
+                self.fetch_page(x + 1)
             total = datetime.datetime.now() - ahora
-            print("Terminado en {} segundos".format(str(total.total_seconds()).replace(".",",")))
+            print("Terminado en {} segundos".format(str(total.total_seconds()).replace(".", ",")))
         self._freezed = True
 
-    ############################# 
-    #                            #
-    # SqlParser: Class Methods 2 #
-    #                            #
-     ############################# 
+        #############################
+        #                            #
+        # SqlParser: Class Methods 2 #
+        #                            #
+        #############################
 
     def get_columns(self, sql):
         if not self.freezed:
-            sql  = sql.replace("\n", " ")
+            sql = sql.replace("\n", " ")
             if not " from" in sql.lower():
                 columns = re.findall(r"(?<=select )([\w+ ,()\*\@\[\]\.\-_'<>=/\+]+)", sql.lower())
-                print ("not from")
+                print("not from")
             else:
                 if not "select distinct " in sql.lower()[:32]:
                     columns = re.findall(r"(?<=select )([\w+ ,()\*\@\[\]\.\-_'<>=/\+]+) from", sql.lower())
@@ -596,7 +606,7 @@ class SqlParser(object):
                 for index, column in enumerate(columns):
                     if " from " in column:
                         columns[index] = columns[index].split(" ")[0]
-                        if not indice: indice = index+1
+                        if not indice: indice = index + 1
                 columns = columns[:indice]
                 be_columns = list()
                 last_column = str()
@@ -605,7 +615,7 @@ class SqlParser(object):
                     if "(" in column and ")" not in column:
                         counter += 1
                         last_column += column
-                    elif ")" in column and "(" not in column and counter==1:
+                    elif ")" in column and "(" not in column and counter == 1:
                         be_columns.append("{}, {}".format(last_column, column))
                         last_column = str()
                         counter -= 1
@@ -615,8 +625,8 @@ class SqlParser(object):
                         be_columns.append(column)
                 for index, column in enumerate(be_columns):
                     if "=" in column and "(" in column and (
-                                column.index("(")>column.index("=") or
-                                (")" in column and column.index(")")<column.index("="))):
+                                    column.index("(") > column.index("=") or
+                                (")" in column and column.index(")") < column.index("="))):
                         be_columns[index] = re.findall(r"([\w ]+)=", column)[0].strip()
                 columns = be_columns
 
@@ -628,7 +638,7 @@ class SqlParser(object):
             table = str()
             for column in columns:
                 if "*" in column:
-                    table = re.findall(r"([\w]+)\.\*", column.lower()) #Revisar esto
+                    table = re.findall(r"([\w]+)\.\*", column.lower())  # Revisar esto
                     table_columns = self.get_columns_names(table)
                     for table in table_columns:
                         for col in table_columns[table]:
@@ -644,56 +654,57 @@ class SqlParser(object):
                     if " as " in column:
                         column = re.findall(r"(?<= as )([\w\._\-]+)", column)[-1]
                     final_columns.append(column)
-                    
+
             self._sql = self._sql.replace("*", ", ".join(final_columns))
             if final_columns != list():
-                #self._sql = self._sql.replace("*", ", {}.".format(table).join(final_columns))
+                # self._sql = self._sql.replace("*", ", {}.".format(table).join(final_columns))
                 self._sql = self._sql.replace("*.{}".format(table), ", ".join(final_columns))
             return final_columns
         else:
             return self.columns
 
     def get_columns_names(self, table_name=list()):
-        if table_name==list(): 
+        if table_name == list():
             table_name = [table for table in self.tables]
         final = dict()
         if not self.freezed:
             for table in table_name:
-                #print("Table: {}".format(table))
+                # print("Table: {}".format(table))
                 if not "information_schema" in table:
                     db = str()
                     tabled = table
                     if "dbo" in table:
                         db, tabled = re.findall("([\w]+.)dbo.([\w]+)", table)[0]
-                    sql = "select column_name from {}information_schema.columns where table_name='{}'".format(db, tabled)
-                    #print("Sql: {}".format(sql))
+                    sql = "select column_name from {}information_schema.columns where table_name='{}'".format(db,
+                                                                                                              tabled)
+                    # print("Sql: {}".format(sql))
                     sqlnames = SqlParser(sql)
                     names = list()
                     for x in range(sqlnames.pages):
-                        pagina = sqlnames.fetch_page(x+1, False)
+                        pagina = sqlnames.fetch_page(x + 1, False)
                         for y in range(MAX_ROWS):
                             try:
-                                names.append(pagina.Index(y,0))
+                                names.append(pagina.Index(y, 0))
                             except:
                                 break
                     if table not in final:
                         final[table] = list()
                     final[table].extend(names)
-            #print("Total Columnas: {}".format(len(final)))
+            # print("Total Columnas: {}".format(len(final)))
             return final
         else:
-            return self.columns       
+            return self.columns
 
     def get_count(self):
         '''
         Cuenta los registros. Como es necesario pasar antes por get_tables y get_columns y get_where...
         TODO: Implementar "JOIN"
         '''
-        if (not self.freezed and self.sql!=str() and 
-                "insert into " not in self.sql.lower() and 
-                "update " not in self.sql.lower()):
+        if (not self.freezed and self.sql != str() and
+                    "insert into " not in self.sql.lower() and
+                    "update " not in self.sql.lower()):
             self._tables = SqlParser.get_tables(self.sql)
-            print("Aquí: "+self.sql)
+            print("Aquí: " + self.sql)
             self._columns = self.get_columns(self.sql)
             self._where = SqlParser.get_where(self.sql)
             sql = self.sql
@@ -704,32 +715,34 @@ class SqlParser(object):
                 self.execute(sql)
             except:
                 raise
-            #print(sql)
+            # print(sql)
             data = self.fetch_page(1, False)
-            final_count = data.Index(0,0)
-            #print("Total: {}".format(str(final_count)))
+            final_count = data.Index(0, 0)
+            # print("Total: {}".format(str(final_count)))
             return final_count
         else:
             return self.count
-    
 
-    ############################# 
-    #                            #
-    # SqlParser: Class Methods 3 #
-    #                            #
-     #############################
+
+            #############################
+            #                            #
+            # SqlParser: Class Methods 3 #
+            #                            #
+            #############################
 
     def get_index(self, index, value, method=App.QueryMatchType.NoValue):
         class GetterIndex:
             def __init__(self, parser, index):
                 self.parser = parser
                 self.index = list(index)
+
             def __getitem__(self, pos):
                 return self.parser[int(self.index[pos])]
+
             @property
             def count(self):
                 return len(self.index)
-                
+
         if index in self.index:
             final = None
             if value in self.index[index]:
@@ -745,25 +758,28 @@ class SqlParser(object):
                 for ind, item in enumerate(self):
                     key = item.get_column(index)
                     if key not in self.index[index]:
-                        self.index[index][key]=set()
+                        self.index[index][key] = set()
                     self.index[index][key].add(ind)
 
     def primary_key(self, table):
-        sql = "select i.name as index_name, COL_NAME(ic.object_id, ic.column_id) as column_name, ic.index_column_id, ic.key_ordinal, ic.is_included_column from sys.indexes as i inner join sys.index_columns as ic on i.object_id = ic.object_id and i.index_id = ic.index_id where i.object_id = OBJECT_ID('{}') and i.is_primary_key=1".format(table)
+        sql = "select i.name as index_name, COL_NAME(ic.object_id, ic.column_id) as column_name, ic.index_column_id, ic.key_ordinal, ic.is_included_column from sys.indexes as i inner join sys.index_columns as ic on i.object_id = ic.object_id and i.index_id = ic.index_id where i.object_id = OBJECT_ID('{}') and i.is_primary_key=1".format(
+            table)
         key = SqlParser(sql)
         return key[0].column_name
 
     def unique_key(self, table):
-        sql = "select i.name as index_name, COL_NAME(ic.object_id, ic.column_id) as column_name, ic.index_column_id, ic.key_ordinal, ic.is_included_column from sys.indexes as i inner join sys.index_columns as ic on i.object_id = ic.object_id and i.index_id = ic.index_id where i.object_id = OBJECT_ID('{}') and i.is_unique=1".format(table)
+        sql = "select i.name as index_name, COL_NAME(ic.object_id, ic.column_id) as column_name, ic.index_column_id, ic.key_ordinal, ic.is_included_column from sys.indexes as i inner join sys.index_columns as ic on i.object_id = ic.object_id and i.index_id = ic.index_id where i.object_id = OBJECT_ID('{}') and i.is_unique=1".format(
+            table)
         key = SqlParser(sql)
         return key[0].column_name
-    
 
-#######################    ###   ###  #   #  #### #  ###
-#                      #  #     #   # ##  # #     # #   
-# Configuration Driver #  #     #   # # # # ###   # # ###
-#                      #  #     #   # #  ## #     # #   #
- #######################   ###   ###  #   # #     #  ###   
+
+        #######################    ###   ###  #   #  #### #  ###
+        #                      #  #     #   # ##  # #     # #
+        # Configuration Driver #  #     #   # # # # ###   # # ###
+        #                      #  #     #   # #  ## #     # #   #
+        #######################   ###   ###  #   # #     #  ###
+
 
 class Config(configparser.ConfigParser):
     '''
@@ -777,19 +793,20 @@ class Config(configparser.ConfigParser):
       team
       extension
     '''
+
     #############################
     #                            #
     # Config: __init__           #
     #                            #
-     #############################
-    
+    #############################
+
     def __init__(self, path=None, pathclass=Path, **kwargs):
         '''
         Initializacion of the object Config.
         config_file = path of the configuration file. config.ini as default.
         kwargs as kwargs of initialized method
         '''
-        #if config_file==None:
+        # if config_file==None:
         #    config_file = "config.ini"
         # Si config_file es None, no se guarda. Sea.
         if path:
@@ -802,32 +819,32 @@ class Config(configparser.ConfigParser):
         else:
             self.initialize(**kwargs)
 
-    ############################# 
-    #                            #
-    # Config: Properties         #
-    #                            #
-     #############################
+            #############################
+            #                            #
+            # Config: Properties         #
+            #                            #
+            #############################
 
     @property
     def server(self):
         return self["server"]
-        
-    ############################# 
-    #                            #
-    # Config: Static Methods     #
-    #                            #
-     #############################
 
-    ############################# 
-    #                            #
-    # Config: Methods            #
-    #                            #
-     #############################
-    
+        #############################
+        #                            #
+        # Config: Static Methods     #
+        #                            #
+        #############################
+
+        #############################
+        #                            #
+        # Config: Methods            #
+        #                            #
+        #############################
+
     def initialize(self, *, instance="sesmapaltas01:1500",
-            username=None, password=None, secureconnection=False,
-            site="Madrid", team=None, extension=None,
-            **kwargs):
+                   username=None, password=None, secureconnection=False,
+                   site="Madrid", team=None, extension=None,
+                   **kwargs):
         '''
         Initialize the config file with the most basic configurations
         '''
@@ -839,7 +856,7 @@ class Config(configparser.ConfigParser):
             "site": site,
             "team": team,
             "extension": extension
-            }
+        }
         self.save()
 
     def reload_ini(self):
@@ -853,21 +870,22 @@ class Config(configparser.ConfigParser):
             with open(self.path.config, "w") as config_file:
                 self.write(config_file)
 
-################   # #####  ### #   #
-#               #  #   #   #    ## ##
-# Parsed Atom   #  #   #   ###  # # #
-#               #  #   #   #    #   #
- ################  #   #    ### #   #
+                ################   # #####  ### #   #
+                #               #  #   #   #    ## ##
+                # Parsed Atom   #  #   #   ###  # # #
+                #               #  #   #   #    #   #
+                ################  #   #    ### #   #
+
 
 class Item():
     def __init__(self, fetched, column_list, row, total):
         self.fetched = fetched
-        if column_list!=list():
+        if column_list != list():
             self.column_list = column_list
         else:
             self.column_list = ["Column{}".format(str(x)) for x in range(self.fetched.columncount)]
         self.item_column_list = list(self.column_list)
-        self.column_list=[col.replace(".", "_") for col in self.column_list]
+        self.column_list = [col.replace(".", "_") for col in self.column_list]
         self.total = total
         self.row = row
         self._iter_index = 0
@@ -877,7 +895,7 @@ class Item():
             return self.get_row(self.row, attribute)
         else:
             for item in self.column_list:
-                if attribute.lower() == item[0-len(attribute):].lower():
+                if attribute.lower() == item[0 - len(attribute):].lower():
                     return self.get_row(self.row, item)
             raise AttributeError
 
@@ -894,23 +912,23 @@ class Item():
         for key in self.item_column_list:
             yield key, self[key]
 
-    #def __next__(self):
-        #try:
-        #    row = self.get_row(self.row, column)
-        #    self._iter_index += 1
-        #    return row
-        #except:
-        #    self._iter_index = 0
-        #    raise StopIteration
+            # def __next__(self):
+            # try:
+            #    row = self.get_row(self.row, column)
+            #    self._iter_index += 1
+            #    return row
+            # except:
+            #    self._iter_index = 0
+            #    raise StopIteration
 
     def __repr__(self):
-        final = "{}\n".format("-"*40)
-        row = "{} Row Number {} ".format("-"*10, str(self.row))
-        final += "{}{}\n".format(row, "-"*(40-(len(row))))
+        final = "{}\n".format("-" * 40)
+        row = "{} Row Number {} ".format("-" * 10, str(self.row))
+        final += "{}{}\n".format(row, "-" * (40 - (len(row))))
         for column in self.column_list:
             final += "{}: {}\n".format(column, self.__getattr__(column))
-        final += "{}{}\n".format(row, "-"*(40-(len(row))))
-        final += "{}\n".format("-"*40)
+        final += "{}{}\n".format(row, "-" * (40 - (len(row))))
+        final += "{}\n".format("-" * 40)
         return final
         return "<Row number {}>".format(self.row)
 
@@ -929,12 +947,12 @@ class Item():
         return self.__getattr__(column)
 
     def get_subrow(self, row):
-        return row-MAX_ROWS*int(row/MAX_ROWS)
-        
+        return row - MAX_ROWS * int(row / MAX_ROWS)
+
     def get_row(self, row, column):
         try:
             subrow = self.get_subrow(row)
-            if column in self.column_list and subrow<self.fetched.rowcount:
+            if column in self.column_list and subrow < self.fetched.rowcount:
                 fetched = self.fetched.Index(subrow, self.column_list.index(column))
                 return fetched
             else:
@@ -946,16 +964,18 @@ class Item():
         self.row = row
         return self
 
-##################
-#                 #
-# Events Handler  #
-#                 #
- ##################
+        ##################
+        #                 #
+        # Events Handler  #
+        #                 #
+        ##################
 
-class DefaultEventHandler():
+
+class DefaultEventHandler(object):
     '''
     Default Event Handler. Nothing to do with it.
     '''
+
     def ActiveSessionChanged(self, this, activeSessionId):
         pass
 
@@ -966,7 +986,7 @@ class DefaultEventHandler():
         pass
 
     def CampaignFeatureErrorEvent(self, this, campaign,
-            requestType, progressType):
+                                  requestType, progressType):
         pass
 
     def CampaignFeatureEvent(self, this, campaign, featureInvokedType):
@@ -1061,17 +1081,14 @@ class DefaultEventHandler():
 
     def UserMessage(self, this, message):
         pass
-        
-#################################################### 
-#                                                   #
-# TODO: Other classes not implemented yet           #
-#                                                   #
- ####################################################
+
+        ####################################################
+        #                                                   #
+        # TODO: Other classes not implemented yet           #
+        #                                                   #
+        ####################################################
 
 
-
-    
-        
 class Session():
     '''
     Session Class indicating a session in uAgent
@@ -1079,9 +1096,10 @@ class Session():
     '''
     pass
 
+
 class Campaign():
     '''
     Campaign Class
     '''
 
-    
+
