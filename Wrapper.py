@@ -7,8 +7,10 @@ comtypes.client.GetModule(os.path.join(ALTITUDE_PATH, "Altitude.uAgentWin.Applic
 comtypes.client.GetModule(os.path.join(ALTITUDE_PATH, "Altitude.uAgentWin.Engine.Control.tlb"))
 from comtypes.gen.Altitude_uAgentWin_Engine_Control import uAgentEngineControl8 as api
 from comtypes.gen.Altitude_uAgentWin_Application_API import uAgentWindowsApplicationAPI8 as appapi
+from zashel.utils import daemonize
 from comtypes.gen.Altitude_uAgentWin_API import uAgentAPIEvents
 import configparser
+import getpass
 import re
 import uuid
 import shutil
@@ -171,6 +173,18 @@ class App(object):
         except:
             raise
 
+    def attach(self, username=None, password=None, handler=None):
+        global API, AppAPI
+        if username is None:
+            username = getpass.getuser()
+        print(username)
+        print(password)
+        AppAPI = comtypes.client.CreateObject(appapi)
+        if AppAPI.CanAttach():
+            API = AppAPI.Attach(username, password)
+            App.API = API
+        self.set_event_handler(handler)
+
     def login(self, *, instance=None, username=None, password=None, secureconnection=None,
               setcontext=True, site=None, team=None, extension=None):
         global API, AppAPI
@@ -258,8 +272,17 @@ class App(object):
             API.CloseContactsCursor(campaign, cursor)
             yield finalcontacts
 
+    @daemonize
     def set_event_handler(self, handler):
         self._event_handler = comtypes.client.GetEvents(API, handler, uAgentAPIEvents)
+        while True:
+            try:
+                comtypes.client.PumpEvents(0.5)
+            except WindowsError as details:
+                if details.args[3] != -2147417835:  # timeout expired
+                    pass
+                else:
+                    raise
 
     def set_login_context(self, site=None, team=None, extension=None):
         if not site:
