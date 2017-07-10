@@ -981,6 +981,6 @@ class ScriptModuleWrapper(object):
                 print("Script: {}".format(script))
                 raise AttributeError
         else:
-            print("Module: {}".format(module))
+            print("Module: {} not in {}".format(module, modules))
             raise AttributeError
         

@@ -343,7 +343,7 @@ class SqlParser(object):
         self._index = dict()
         self._bind_list = bind_list
         self._iter_index = int()
-        if not " delete " in sql and not " drop " in sql:
+        if not " drop " in sql:
             self.cursorSQL = -1
             self.lastquery = ""
             self._sql = SqlParser.parse_sql(sql, self._bind_list)
