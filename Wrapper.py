@@ -900,29 +900,40 @@ class Config(configparser.ConfigParser):
                 ################  #   #    ### #   #
 
 
-class Item():
+class Item(dict):
     def __init__(self, fetched, column_list, row, total):
+        dict.__init__(self)
         self.fetched = fetched
         if column_list != list():
             self.column_list = column_list
         else:
             self.column_list = ["Column{}".format(str(x)) for x in range(self.fetched.columncount)]
         self.item_column_list = list(self.column_list)
-        self.column_list = [col.replace(".", "_") for col in self.column_list]
+        #self.column_list = [col.replace(".", "_") for col in self.column_list]
         self.total = total
         self.row = row
         self._iter_index = 0
 
+
     def __getattr__(self, attribute):
+        if attribute in self:
+            return self[attribute]
+        else:
+            for item in self:
+                if attribute.lower() == item[0 - len(attribute):].lower().replace(".", "_"):
+                    return self[item]
+            raise AttributeError()
+
+    """def __getattr__(self, attribute):
         if attribute in self.column_list:
             return self.get_row(self.row, attribute)
         else:
             for item in self.column_list:
                 if attribute.lower() == item[0 - len(attribute):].lower():
                     return self.get_row(self.row, item)
-            raise AttributeError
+            raise AttributeError"""
 
-    def __getitem__(self, item):
+    """def __getitem__(self, item):
         if item in self:
             return self.__getattr__(item.replace(".", "_"))
         else:
@@ -933,7 +944,7 @@ class Item():
 
     def __iter__(self):
         for key in self.item_column_list:
-            yield key, self[key]
+            yield key, self[key]"""
 
             # def __next__(self):
             # try:
@@ -944,7 +955,10 @@ class Item():
             #    self._iter_index = 0
             #    raise StopIteration
 
-    def __repr__(self):
+    """def __repr__(self):
+        return dict(self).__repr__() # As easy as this"""
+
+    '''def __repr__(self):
         final = "{}\n".format("-" * 40)
         row = "{} Row Number {} ".format("-" * 10, str(self.row))
         final += "{}{}\n".format(row, "-" * (40 - (len(row))))
@@ -954,6 +968,7 @@ class Item():
         final += "{}\n".format("-" * 40)
         return final
         return "<Row number {}>".format(self.row)
+    ''' # This is going to be represented as a dictionary
 
     @property
     def row(self):
@@ -969,7 +984,7 @@ class Item():
     def get_column(self, column):
         return self.__getattr__(column)
 
-    def get_subrow(self, row):
+    def get_subrow(self, row): #DEPRECATED
         return row - MAX_ROWS * int(row / MAX_ROWS)
 
     def get_row(self, row, column):
@@ -985,6 +1000,11 @@ class Item():
 
     def set_row(self, row):
         self.row = row
+        subrow = row - MAX_ROWS * int(row / MAX_ROWS)
+        data = [self.fetched.Index(subrow, column)
+                for column in range(self.fetched.columncount)]
+        self.clear()
+        self.update(zip(self.item_column_list, data))
         return self
 
         ##################
