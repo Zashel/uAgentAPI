@@ -20,6 +20,8 @@ import time
 Altitude 8 uAgent Pythonised Wrapper for Transcom.
 '''
 
+class CampaignNotReadyError(Exception):
+    pass
 
 class Path(object):
     def __init__(self, config, base=os.environ["HOMEPATH"], extra=None):
@@ -130,6 +132,11 @@ class App(object):
                 pass
 
     @property
+    def campaigns(self):
+        campaigns = API.GetCampaigns()
+        return [campaigns.Index(index).name for index in range(campaigns.Count)]
+
+    @property
     def is_logged(self):
         try:
             return API.GetAgentLoginName()
@@ -146,32 +153,22 @@ class App(object):
         API.GlobalPhoneDial("={}".format(str(number)), "", "")
 
     def hang_up(self):
-        try:
-            API.GlobalPhoneHangUp()
-        except:
-            pass
+        API.GlobalPhoneHangUp()
 
     def campaign_open(self, campaign):
         '''
         La dejamos con la telefonía abierta porque así mola más.
         '''
-        try:
-            API.CampaignOpen(campaign)
-        except:
-            raise
-        try:
-            API.CampaignSignOn(campaign)
-        except:
-            raise
+        if not campaign in self.campaigns:
+            raise CampaignNotReadyError()
+        API.CampaignOpen(campaign)
+        API.CampaignSignOn(campaign)
 
     def campaign_set_not_ready(self, campaign, reason):
         '''
         Ponemos el AUX en una campaña. CACA.
         '''
-        try:
-            API.CampaignSetNotReady(campaign, API.GetNotReadyReasons().Index(reason))
-        except:
-            raise
+        API.CampaignSetNotReady(campaign, API.GetNotReadyReasons().Index(reason))
 
     def attach(self, username=None, password=None, handler=None):
         global API, AppAPI
@@ -183,7 +180,7 @@ class App(object):
         if AppAPI.CanAttach():
             API = AppAPI.Attach(username, password)
             App.API = API
-        self.set_event_handler(handler)
+        #self.set_event_handler(handler)
 
     def login(self, *, instance=None, username=None, password=None, secureconnection=None,
               setcontext=True, site=None, team=None, extension=None):
@@ -234,7 +231,7 @@ class App(object):
                     self.set_login_context(site=site, team=team, extension=extension)
                 except:
                     raise
-        self.set_event_handler(DefaultEventHandler())
+        #self.set_event_handler(DefaultEventHandler())
 
     def logout(self):
         # for sql in self.parsers:
