@@ -9,6 +9,7 @@ from comtypes.gen.Altitude_uAgentWin_Engine_Control import uAgentEngineControl8 
 from comtypes.gen.Altitude_uAgentWin_Application_API import uAgentWindowsApplicationAPI8 as appapi
 from zashel.utils import daemonize
 from comtypes.gen.Altitude_uAgentWin_API import uAgentAPIEvents
+from multiprocessing.managers import BaseManager
 import configparser
 import getpass
 import re
@@ -19,6 +20,8 @@ import time
 '''
 Altitude 8 uAgent Pythonised Wrapper for Transcom.
 '''
+
+PORT = 50005
 
 class CampaignNotReadyError(Exception):
     pass
@@ -91,8 +94,7 @@ AppAPI = None
 MAX_API_ROWS = API.Constants.MaxCursorFetchRows
 MAX_ROWS = MAX_API_ROWS
 
-
-class App(object):
+class App:
     '''
     Principal Class of uAgentAPI.
     '''
@@ -130,6 +132,19 @@ class App(object):
                 AppAPI.Exit()
             except:
                 pass
+            
+    def __getattribute__(self, attribute):
+        try:
+            return object.__getattribute__(self, attribute)
+        except AttributeError:
+            return self.__getattr__(self, attribute)
+        
+    def __getattr__(self, attribute):
+        if attribute.startswith("get_"):
+            try:
+                return lambda: object.__getatttribute__(self, attribute[4:])
+            except AttributeError:
+                raise #maybe we will do another thing later
 
     @property
     def campaigns(self):
@@ -1141,5 +1156,3 @@ class Campaign():
     '''
     Campaign Class
     '''
-
-
