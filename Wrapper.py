@@ -1,4 +1,8 @@
 import comtypes, comtypes.client
+import queue
+import socket
+import subprocess
+import sys
 import os
 
 ALTITUDE_PATH = r"C:\Program Files (x86)\Altitude\Altitude uCI 8\Altitude uAgent Windows"
@@ -21,6 +25,7 @@ import time
 Altitude 8 uAgent Pythonised Wrapper for Transcom.
 '''
 
+HOST=socket.gethostbyname(socket.gethostname())
 PORT = 50005
 
 class CampaignNotReadyError(Exception):
@@ -88,30 +93,33 @@ class Path(object):
         ####################  #   # #     #
 
 
-API = comtypes.client.CreateObject(api)
+API = None
 AppAPI = None
 # Entorno
-MAX_API_ROWS = API.Constants.MaxCursorFetchRows
+#MAX_API_ROWS = API.Constants.MaxCursorFetchRows
+MAX_API_ROWS = 50
 MAX_ROWS = MAX_API_ROWS
 
-class App:
+
+#############################
+#                            #
+# Pre-enum class:            #
+#             QueryMatchType #
+#                            #
+#############################
+
+class QueryMatchType:
+    NoValue = -1
+    ExactMatch = 0
+    AllWords = 1
+    AnyWord = 2
+
+class _App:
     '''
     Principal Class of uAgentAPI.
     '''
     API = API
-
-    #############################
-    #                            #
-    # Pre-enum class:            #
-    #             QueryMatchType #
-    #                            #
-    #############################
-
-    class QueryMatchType:
-        NoValue = -1
-        ExactMatch = 0
-        AllWords = 1
-        AnyWord = 2
+    AppAPI = AppAPI
 
         #############################
         #                            #
@@ -122,14 +130,15 @@ class App:
 
     def __init__(self, path=None, *, pathclass=Path):
         self.config = Config(path, pathclass)  # We create a 'Config' object to access the configuration
+        _App.API = comtypes.client.CreateObject(api)
         # self.parsers = list()
 
     def __del__(self):
         self.logout()
         # self.parsers = None
-        if AppAPI and AppAPI.CanExit():
+        if _App.AppAPI and _App.AppAPI.CanExit():
             try:
-                AppAPI.Exit()
+                _App.AppAPI.Exit()
             except:
                 pass
             
@@ -148,13 +157,16 @@ class App:
 
     @property
     def campaigns(self):
-        campaigns = API.GetCampaigns()
-        return [campaigns.Index(index).name for index in range(campaigns.Count)]
+        try:
+            campaigns = _App.API.GetCampaigns()
+            return [campaigns.Index(index).name for index in range(campaigns.Count)]
+        except comtypes.COMError:
+            pass
 
     @property
     def is_logged(self):
         try:
-            return API.GetAgentLoginName()
+            return _App.API.GetAgentLoginName()
         except:
             return False
 
@@ -165,10 +177,10 @@ class App:
             #############################
 
     def call_direct(self, number):
-        API.GlobalPhoneDial("={}".format(str(number)), "", "")
+        _App.API.GlobalPhoneDial("={}".format(str(number)), "", "")
 
     def hang_up(self):
-        API.GlobalPhoneHangUp()
+        _App.API.GlobalPhoneHangUp()
 
     def campaign_open(self, campaign):
         '''
@@ -176,25 +188,23 @@ class App:
         '''
         if not campaign in self.campaigns:
             raise CampaignNotReadyError()
-        API.CampaignOpen(campaign)
-        API.CampaignSignOn(campaign)
+        _App.API.CampaignOpen(campaign)
+        _App. API.CampaignSignOn(campaign)
 
     def campaign_set_not_ready(self, campaign, reason):
         '''
         Ponemos el AUX en una campaña. CACA.
         '''
-        API.CampaignSetNotReady(campaign, API.GetNotReadyReasons().Index(reason))
+        _App.API.CampaignSetNotReady(campaign, _App.API.GetNotReadyReasons().Index(reason))
 
     def attach(self, username=None, password=None, handler=None):
         global API, AppAPI
         if username is None:
             username = getpass.getuser()
-        print(username)
-        print(password)
-        AppAPI = comtypes.client.CreateObject(appapi)
-        if AppAPI.CanAttach():
-            API = AppAPI.Attach(username, password)
-            App.API = API
+        _App.AppAPI = comtypes.client.CreateObject(appapi)
+        if _App.AppAPI.CanAttach():
+            _App.API = _App.AppAPI.Attach(username, password)
+            _App.API = API
         #self.set_event_handler(handler)
 
     def login(self, *, instance=None, username=None, password=None, secureconnection=None,
@@ -215,13 +225,13 @@ class App:
                 password = self.config.server["password"]
             else:
                 password = None
-        AppAPI = comtypes.client.CreateObject(appapi)
-        if AppAPI.CanAttach():
-            API = AppAPI.Attach(username, password)
-            App.API = API
+        _App.AppAPI = comtypes.client.CreateObject(appapi)
+        if _App.AppAPI.CanAttach():
+            _App.API = _App.AppAPI.Attach(username, password)
+            _App.API = API
         else:
-            AppAPI.Exit()
-            AppAPI = None
+            _App.AppAPI.Exit()
+            _App.AppAPI = None
             # API = comtypes.client.CreateObject(api)
             # Verificamos los datos para control de excepciones
             if not instance:
@@ -235,7 +245,7 @@ class App:
                 else:
                     secureconnection = False
             try:
-                API.Login(instance, username, password, secureconnection)
+                _App.API.Login(instance, username, password, secureconnection)
             except:
                 raise
 
@@ -251,10 +261,10 @@ class App:
     def logout(self):
         # for sql in self.parsers:
         # del(sql)
-        if AppAPI and AppAPI.CanDetach():
-            AppAPI.Detach()
+        if _App.AppAPI and _App.AppAPI.CanDetach():
+            _App.AppAPI.Detach()
         else:
-            API.CleanUpAgent(True)
+            _App.API.CleanUpAgent(True)
 
     def execute(self, sql, bind_list=tuple()):
         sql = SqlParser(sql, bind_list)
@@ -281,12 +291,12 @@ class App:
                 contacts = API.FetchContactsCursor(campaign, cursor, inicial, maxim)
                 finalcontacts.append(contacts)
                 inicial += maxim
-            API.CloseContactsCursor(campaign, cursor)
+            _App.API.CloseContactsCursor(campaign, cursor)
             yield finalcontacts
 
     @daemonize
     def set_event_handler(self, handler):
-        self._event_handler = comtypes.client.GetEvents(API, handler, uAgentAPIEvents)
+        self._event_handler = comtypes.client.GetEvents(_App.API, handler, uAgentAPIEvents)
         while True:
             try:
                 comtypes.client.PumpEvents(0.5)
@@ -313,7 +323,7 @@ class App:
             else:
                 raise Exception("Falta extensión de logado")
         try:
-            API.SetLoginContext(site, team, extension)
+            _App.API.SetLoginContext(site, team, extension)
         except:
             raise
 
@@ -322,7 +332,7 @@ class App:
         Ponemos el AUX en todas las campañas. MOLA
         '''
         try:
-            API.GlobalSetNotReady(API.GetNotReadyReasons().Index(reason))
+            _App.API.GlobalSetNotReady(_App.API.GetNotReadyReasons().Index(reason))
         except:
             raise
 
@@ -345,7 +355,8 @@ class SqlParser(object):
     #                            #
     #############################
 
-    def __init__(self, sql, bind_list=tuple()):
+    def __init__(self, sql, bind_list=tuple(), *, api=API):
+        self.API = api
         self._freezed = False
         self._count = int()
         self._tables = list()
@@ -361,7 +372,6 @@ class SqlParser(object):
             self._sql = SqlParser.parse_sql(sql, self._bind_list)
             if self._sql.strip()[0:7].lower() == "select ":
                 self._count = self.get_count()
-            print(self._count)
             self.execute(self.sql)
 
         else:
@@ -379,8 +389,24 @@ class SqlParser(object):
             #                            #
             #############################
 
+    def get_item(self, key):
+        if key < int(self._count):
+            try:
+                page = int(key / MAX_ROWS) + 1
+                subkey = key - ((page - 1) * MAX_ROWS)
+                if page not in self.items:
+                    data = self.fetch_page(page)
+                    # item = Item(data, self.columns, subkey)
+                    return dict(self.items[page].set_row(key))
+                else:
+                    return dict(self.items[page].set_row(key))
+            except:
+                raise IndexError
+        else:
+            raise IndexError("EOL")
+
     def __getitem__(self, key):
-        if key < self.count:
+        if key < int(self._count):
             try:
                 page = int(key / MAX_ROWS) + 1
                 subkey = key - ((page - 1) * MAX_ROWS)
@@ -417,13 +443,13 @@ class SqlParser(object):
                     self.parser = parser
                     self.index = index
 
-                def __call__(self, value, method=App.QueryMatchType.NoValue):
+                def __call__(self, value, method=QueryMatchType.NoValue):
                     return self.parser.get_index(self.index, value, method)
 
             return Index(self, attribute)
 
         else:
-            super().__getattr__(self, attribute)
+            super().__getattribute__(attribute)
 
 
             #############################
@@ -544,7 +570,7 @@ class SqlParser(object):
 
     def close_cursor(self):
         if not self.freezed and self.cursorSQL != -1:
-            API.CloseSQLCursor(self.cursorSQL)
+            self.API.CloseSQLCursor(self.cursorSQL)
             # print("Closed {} cursor".format(str(self.cursorSQL)))
         elif self.freezed:
             raise Exception("No se puede cerrar un cursor ya cerrado.")
@@ -553,7 +579,7 @@ class SqlParser(object):
         if not self.freezed:
             for x in range(2):
                 try:
-                    self.cursorSQL = API.OpenSqlCursor(self.cursorSQL, sql, self.lastquery)
+                    self.cursorSQL = self.API.OpenSqlCursor(self.cursorSQL, sql, self.lastquery)
                     break
                 except:
                     # print("Cursor: {}\nSql: {}\nLastQuery: {}".format(self.cursorSQL, sql, self.lastquery))
@@ -570,7 +596,7 @@ class SqlParser(object):
         '''
         if not self.freezed and not page in self.items:
             inicial = (page - 1) * MAX_ROWS
-            data = API.FetchSqlCursor(self.cursorSQL, inicial, MAX_ROWS)
+            data = self.API.FetchSqlCursor(self.cursorSQL, inicial, MAX_ROWS)
             # print("Fetched {} rows in page {}".format(str(data.rowcount), str(page)))
             if save:
                 item = Item(data, self.columns, (page - 1) * MAX_ROWS, self.count)
@@ -590,7 +616,7 @@ class SqlParser(object):
             total = 1
             inicial = 0
             while total > 0:
-                fetched = API.FetchSqlCursor(self.cursorSQL, inicial, MAX_ROWS)
+                fetched = self.API.FetchSqlCursor(self.cursorSQL, inicial, MAX_ROWS)
                 # print("Fetched {} rows in page {}".format(str(fetched.rowcount), str(page)))
                 total = fetched.RowCount
                 inicial += MAX_ROWS
@@ -627,13 +653,11 @@ class SqlParser(object):
             sql = sql.replace("\n", " ")
             if not " from" in sql.lower():
                 columns = re.findall(r"(?<=select )([\w+ ,()\*\@\[\]\.\-_'<>=/\+]+)", sql.lower())
-                print("not from")
             else:
                 if not "select distinct " in sql.lower()[:32]:
                     columns = re.findall(r"(?<=select )([\w+ ,()\*\@\[\]\.\-_'<>=/\+]+) from", sql.lower())
                 else:
                     columns = re.findall(r"(?<=select distinct )([\w+ ,()\*\@\[\]\.\-_'<>=/\+]+) from", sql.lower())
-                print(columns)
             try:
                 columns = columns[0].split(",")
                 columns = [columns[x].strip() for x in range(len(columns))]
@@ -713,7 +737,7 @@ class SqlParser(object):
                     sql = "select column_name from {}information_schema.columns where table_name='{}'".format(db,
                                                                                                               tabled)
                     # print("Sql: {}".format(sql))
-                    sqlnames = SqlParser(sql)
+                    sqlnames = SqlParser(sql, api=self.API)
                     names = list()
                     for x in range(sqlnames.pages):
                         pagina = sqlnames.fetch_page(x + 1, False)
@@ -739,7 +763,6 @@ class SqlParser(object):
                     "insert into " not in self.sql.lower() and
                     "update " not in self.sql.lower()):
             self._tables = SqlParser.get_tables(self.sql)
-            print("Aquí: " + self.sql)
             self._columns = self.get_columns(self.sql)
             self._where = SqlParser.get_where(self.sql)
             sql = self.sql
@@ -765,7 +788,7 @@ class SqlParser(object):
             #                            #
             #############################
 
-    def get_index(self, index, value, method=App.QueryMatchType.NoValue):
+    def get_index(self, index, value, method=QueryMatchType.NoValue):
         class GetterIndex:
             def __init__(self, parser, index):
                 self.parser = parser
@@ -799,13 +822,13 @@ class SqlParser(object):
     def primary_key(self, table):
         sql = "select i.name as index_name, COL_NAME(ic.object_id, ic.column_id) as column_name, ic.index_column_id, ic.key_ordinal, ic.is_included_column from sys.indexes as i inner join sys.index_columns as ic on i.object_id = ic.object_id and i.index_id = ic.index_id where i.object_id = OBJECT_ID('{}') and i.is_primary_key=1".format(
             table)
-        key = SqlParser(sql)
+        key = SqlParser(sql, api=self.API)
         return key[0].column_name
 
     def unique_key(self, table):
         sql = "select i.name as index_name, COL_NAME(ic.object_id, ic.column_id) as column_name, ic.index_column_id, ic.key_ordinal, ic.is_included_column from sys.indexes as i inner join sys.index_columns as ic on i.object_id = ic.object_id and i.index_id = ic.index_id where i.object_id = OBJECT_ID('{}') and i.is_unique=1".format(
             table)
-        key = SqlParser(sql)
+        key = SqlParser(sql, api=self.API)
         return key[0].column_name
 
 
@@ -935,52 +958,6 @@ class Item(dict):
                 if attribute.lower() == item[0 - len(attribute):].lower().replace(".", "_"):
                     return self[item]
             raise AttributeError()
-
-    """def __getattr__(self, attribute):
-        if attribute in self.column_list:
-            return self.get_row(self.row, attribute)
-        else:
-            for item in self.column_list:
-                if attribute.lower() == item[0 - len(attribute):].lower():
-                    return self.get_row(self.row, item)
-            raise AttributeError"""
-
-    """def __getitem__(self, item):
-        if item in self:
-            return self.__getattr__(item.replace(".", "_"))
-        else:
-            raise IndexError
-
-    def __contains__(self, item):
-        return item in self.item_column_list
-
-    def __iter__(self):
-        for key in self.item_column_list:
-            yield key, self[key]"""
-
-            # def __next__(self):
-            # try:
-            #    row = self.get_row(self.row, column)
-            #    self._iter_index += 1
-            #    return row
-            # except:
-            #    self._iter_index = 0
-            #    raise StopIteration
-
-    """def __repr__(self):
-        return dict(self).__repr__() # As easy as this"""
-
-    '''def __repr__(self):
-        final = "{}\n".format("-" * 40)
-        row = "{} Row Number {} ".format("-" * 10, str(self.row))
-        final += "{}{}\n".format(row, "-" * (40 - (len(row))))
-        for column in self.column_list:
-            final += "{}: {}\n".format(column, self.__getattr__(column))
-        final += "{}{}\n".format(row, "-" * (40 - (len(row))))
-        final += "{}\n".format("-" * 40)
-        return final
-        return "<Row number {}>".format(self.row)
-    ''' # This is going to be represented as a dictionary
 
     @property
     def row(self):
@@ -1156,3 +1133,120 @@ class Campaign():
     '''
     Campaign Class
     '''
+
+class Manager(BaseManager):
+    pass
+Manager.register("app")
+Manager.register("user")
+Manager.register("sqlparser")
+Manager.register("queue")
+Manager.register("shutdown")
+
+def get_manager():
+    port = PORT
+    while True:
+        try:
+            manager = Manager(address=(HOST, port), authkey=b"uAgentAPI.Wrapper")
+            manager.connect()
+        except ConnectionRefusedError:
+            return (None, port)
+        else:
+            if str(manager.user()) == "'" + os.environ["USERNAME"] + "'":
+                return (manager, port)
+            else:
+                port += 1
+                continue
+
+def open():
+    args = [sys.executable] + [os.path.join(os.path.dirname(os.path.abspath(__file__)), "Wrapper.py")]
+    new_environ = os.environ.copy()
+    subprocess.Popen(args, env=new_environ, creationflags=subprocess.CREATE_NEW_CONSOLE)
+    time.sleep(1)
+
+
+class App():
+    class SqlParser:
+        def __init__(self, parser):
+            self._parser = parser
+
+        def __getitem__(self, item):
+            return self._parser.get_item(item)
+
+    def __init__(self):
+        for x in range(5):
+            try:
+                self._manager, self._port = get_manager()
+                self._app = self._manager.app()
+            except AttributeError:
+                time.sleep(x+0.5)
+            else:
+                break
+
+    def __getattribute__(self, attribute):
+        try:
+            return object.__getattribute__(self, attribute)
+        except AttributeError:
+            return self.__getattr__(attribute)
+
+    def __getattr__(self, attribute):
+        try:
+            return self._app.__getattribute__(attribute)
+        except ConnectionRefusedError:
+            open()
+
+    @property
+    def config(self):
+        return self._manager.get_config()
+
+    @property
+    def campaigns(self):
+        return self._manager.get_campaigns()
+
+    @property
+    def is_logged(self):
+        return self._manager.get_is_logged()
+
+    def execute(self, sql, bind_list=tuple()):
+        try:
+            data = self._manager.sqlparser(sql, bind_list)
+            return App.SqlParser(data)
+        except ConnectionRefusedError:
+            open()
+            return self.execute(sql, bind_list)
+
+    def shutdown(self):
+        self._manager.shutdown()
+
+if __name__ == "__main__":
+    user = os.environ["USERNAME"]
+    manager, port = get_manager()
+    if manager is None:
+        manager_queue = queue.Queue()
+        app = _App()
+        class ProcessManager(BaseManager):
+            pass
+        ProcessManager.register("app", lambda app=app: app)
+        ProcessManager.register("api", lambda app=app: app.API)
+        ProcessManager.register("user", lambda user=user: user)
+        ProcessManager.register("sqlparser", lambda *args, api=app.API: SqlParser(*args, api=api))
+        ProcessManager.register("queue", lambda manager_queue=manager_queue: manager_queue)
+        ProcessManager.register("shutdown", lambda manager_queue=manager_queue: manager_queue.put("Shutdown"))
+        processmanager = ProcessManager(address=("0.0.0.0", port), authkey=b"uAgentAPI.Wrapper")
+        server = processmanager.get_server()
+        @daemonize
+        def start():
+            server.serve_forever()
+        start()
+        while True:
+            try:
+                data = manager_queue.get() # Don't know if a Timeout is imperative now...
+            except queue.Empty:
+                break
+            else:
+                if data == "Shutdown":
+                    break
+                else:
+                    pass #TODO
+        server.server_close()
+else:
+    open()
