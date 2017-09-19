@@ -141,19 +141,6 @@ class _App:
                 _App.AppAPI.Exit()
             except:
                 pass
-            
-    def __getattribute__(self, attribute):
-        try:
-            return object.__getattribute__(self, attribute)
-        except AttributeError:
-            return self.__getattr__(self, attribute)
-        
-    def __getattr__(self, attribute):
-        if attribute.startswith("get_"):
-            try:
-                return lambda: object.__getatttribute__(self, attribute[4:])
-            except AttributeError:
-                raise #maybe we will do another thing later
 
     @property
     def campaigns(self):
@@ -169,6 +156,12 @@ class _App:
             return _App.API.GetAgentLoginName()
         except:
             return False
+
+    def get_campaigns(self):
+        return self.campaigns
+
+    def get_is_logged(self):
+        return self.is_logged
 
             #############################
             #                            #
@@ -488,26 +481,37 @@ class SqlParser(object):
     def sql(self):
         return self._sql
 
-    '''@sql.setter
-    def sql(self, value):
-        if not self.freezed:
-            self._sql = value
-            self._count = self.get_count()
-            self._items = dict()
-            try:
-                self.cursorSQL = API.OpenSqlCursor(self.cursorSQL, self.sql, self.lastquery
-            except:
-                print("Cursor: {}\nSql: {}\nLastQuery: {}\n".format(self.cursorSQL, self.sql, self.lastquery))
-                raise
-        else:
-            raise AttributeError("can't set attribute'")'''
-
     @property
     def tables(self):
         return self._tables
 
     @property
     def where(self):
+        return self._where
+
+        #Properties getters and doers fo manager
+    def do_count(self):
+        return int(self._count)
+
+    def keys(self):
+        return self._columns
+
+    def is_freezed(self):
+        return self._freezed
+
+    def get_current_index(self):
+        return self._index
+
+    def total_pages(self):
+        return self.pages
+
+    def get_sql(self):
+        return self._sql
+
+    def get_table_names(self):
+        return self._tables
+
+    def get_where_clause(self):
         return self._where
 
 
@@ -1157,22 +1161,87 @@ def get_manager():
                 port += 1
                 continue
 
+
 def open():
     args = [sys.executable] + [os.path.join(os.path.dirname(os.path.abspath(__file__)), "Wrapper.py")]
     new_environ = os.environ.copy()
-    subprocess.Popen(args, env=new_environ, creationflags=subprocess.CREATE_NEW_CONSOLE)
+    subprocess.Popen(args, env=new_environ,
+                     creationflags=0x08000000) # To hide console
+                     #creationflags=subprocess.CREATE_NEW_CONSOLE) # to watch console
     time.sleep(1)
 
 
 class App():
     class SqlParser:
+        class Item(dict):
+            def __getattribute__(self, attribute):
+                return dict.__getattribute__(self, attribute)
+
+            def __getattr__(self, attribute):
+                if attribute in self:
+                    return self[attribute]
+                else:
+                    keys = list(self.keys())
+                    for item in keys:
+                        if item.endswith(attribute):
+                            return self[item]
+                raise AttributeError()
+
         def __init__(self, parser):
             self._parser = parser
+            self._iter_index = int()
 
         def __getitem__(self, item):
-            return self._parser.get_item(item)
+            return App.SqlParser.Item(self._parser.get_item(item))
 
-    def __init__(self):
+        def __iter__(self):
+            self._iter_index = int()
+            return self
+
+        def __len__(self):
+            return self._parser.do_count()
+
+        def __next__(self):
+            index = self._iter_index
+            if index < len(self):
+                self._iter_index += 1
+                return self[index]
+            else:
+                raise StopIteration()
+
+        @property
+        def count(self): #Deprecated
+            return self._parser.do_count()
+
+        @property
+        def columns(self):
+            return self._parser.keys()
+
+        @property
+        def freezed(self):
+            return self._parser.is_freezed()
+
+        @property
+        def index(self):
+            return self._parser.get_current_index()
+
+        @property
+        def pages(self):
+            return self._parser.total_pages()
+
+        @property
+        def sql(self):
+            return self._parser.get_sql()
+
+        @property
+        def tables(self):
+            return self._parser.get_table_names()
+
+        @property
+        def where(self):
+            return self._parser.get_where_clause()
+
+    def __init__(self, path=None, *, pathclass=Path):
         for x in range(5):
             try:
                 self._manager, self._port = get_manager()
@@ -1183,28 +1252,31 @@ class App():
                 break
 
     def __getattribute__(self, attribute):
-        try:
-            return object.__getattribute__(self, attribute)
-        except AttributeError:
-            return self.__getattr__(attribute)
+        return object.__getattribute__(self, attribute)
 
     def __getattr__(self, attribute):
         try:
             return self._app.__getattribute__(attribute)
         except ConnectionRefusedError:
             open()
+            time.sleep(2)
+            return self._app.__getattribute__(attribute)
 
     @property
     def config(self):
-        return self._manager.get_config()
+        return self._app.get_config()
 
     @property
     def campaigns(self):
-        return self._manager.get_campaigns()
+        return self._app.get_campaigns()
 
     @property
     def is_logged(self):
-        return self._manager.get_is_logged()
+        return self._app.get_is_logged()
+
+    @staticmethod
+    def open_server():
+        open()
 
     def execute(self, sql, bind_list=tuple()):
         try:
@@ -1215,7 +1287,10 @@ class App():
             return self.execute(sql, bind_list)
 
     def shutdown(self):
-        self._manager.shutdown()
+        try:
+            self._manager.shutdown()
+        except ConnectionResetError:
+            pass # We expect this error if everything goes OK
 
 if __name__ == "__main__":
     user = os.environ["USERNAME"]

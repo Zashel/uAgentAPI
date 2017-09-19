@@ -350,7 +350,7 @@ group by
         sql = "select distinct customer_id, lote from dir_recobros_orange "
         sql += "where typ_business_segment like ? and dat_dead_line >= ? "
         sql += "and call_status = 1 order by lote asc;"
-        return App.execute(self, sql, (segmento, dat_dead_line))
+        return self.execute(sql, (segmento, dat_dead_line))
         
     def get_carteras_fijo(self, dat_dead_line=None, *, segmento=str()):
         dat_dead_line = App.verify_dat_dead_line(dat_dead_line)
@@ -359,7 +359,7 @@ group by
         sql += "on easycode=code "
         sql += "where typ_business_segment like ? and dat_dead_line >= ? "
         sql += "and contact_profile.unique_id like '%F%';"
-        return App.execute(self, sql, (segmento, dat_dead_line))
+        return self.execute(sql, (segmento, dat_dead_line))
 
     def get_carteras_fijo_directorio(self, dat_dead_line=None, *, segmento=str(), final=None):
         dat_dead_line = App.verify_dat_dead_line(dat_dead_line)
@@ -368,7 +368,7 @@ group by
         sql = "select * from dir_recobros_orange "
         sql += "where typ_business_segment like ? and dat_dead_line >= ? "
         sql += "and dat_dead_line <= ?"
-        return App.execute(self, sql, (segmento, dat_dead_line, final))
+        return self.execute(sql, (segmento, dat_dead_line, final))
 
     def get_clientes_fijo_pendientes(self, dat_dead_line=None, *, segmento=str()):
         dat_dead_line = App.verify_dat_dead_line(dat_dead_line)
@@ -385,7 +385,7 @@ group by
         sql += "and dat_dead_line >= ? and call_status in (1, 5) and cp.unique_id like '%F%' "
         sql += "order by Lote asc, Balance desc;"
         try:
-            return App.execute(self, sql, (segmento, dat_dead_line))
+            return self.execute(sql, (segmento, dat_dead_line))
         except:
             print(sql)
             raise
@@ -396,7 +396,7 @@ group by
         sql = "select distinct customer_id from dir_recobros_orange "
         sql += "where typ_business_segment like ? and dat_dead_line >= ? "
         sql += "and last_outcome in (102, 4010, 4020, 4030) and contact_date >= ? and call_status in (1, 5);"
-        return App.execute(self, sql, (segmento, dat_dead_line, App.a_long_time_ago()))
+        return self.execute(sql, (segmento, dat_dead_line, App.a_long_time_ago()))
 
     def get_incumples_fijo(self, dat_dead_line=None, *, segmento=str()):
         dat_dead_line = App.verify_dat_dead_line(dat_dead_line)
@@ -404,7 +404,7 @@ group by
         sql = "select distinct customer_id from dir_recobros_orange "
         sql += "where typ_business_segment like ? and dat_dead_line >= ? "
         sql += "and last_outcome in (102, 4010, 4020, 4030) and contact_date <= ? and call_status = 1;"
-        return App.execute(self, sql, (segmento, dat_dead_line, App.a_long_time_ago()))
+        return self.execute(sql, (segmento, dat_dead_line, App.a_long_time_ago()))
 
     def get_lista_rpv_ia_fijo_emp(self):
         sql = "select customer_id from dir_recobros_orange "
@@ -420,7 +420,7 @@ group by
         sql = "select distinct customer_id from dir_recobros_orange "
         sql += "where typ_business_segment like ? and dat_dead_line >= ? "
         sql += "and last_outcome in (103, 2000, 2010) and call_status = 1;"
-        return App.execute(self, sql, (segmento, dat_dead_line))
+        return self.execute(sql, (segmento, dat_dead_line))
         
     def get_moviles_fijo(self, ruta):
         print("Ruta Móviles Fijo: {}".format(ruta))
@@ -466,7 +466,7 @@ group by
         sql += "where dat_dead_line >= ? and typ_business_segment like ? "
         sql += "group by lote, call_status "
         sql += "order by lote, call_status;"
-        return App.execute(self, sql, (dat_dead_line, segmento))
+        return self.execute(sql, (dat_dead_line, segmento))
         
     def read_moviles_fijos(self, ruta, *, excelapp=None):
         if not excelapp:
@@ -592,7 +592,7 @@ group by
         sql += "rc1.dat_unpaid_invoice < rc2.dat_unpaid_invoice where rc1.call_status = 1 and "
         sql += "(rc2.amount_single - rc2.amount_unpaid) > 0 and rc1.typ_business_segment like ? and "
         sql += "rc1.dat_dead_line > ? order by rc1.dat_dead_line asc;"
-        return App.execute(self, sql, (segmento, dat_dead_line))
+        return self.execute(sql, (segmento, dat_dead_line))
 
     def read_exportacion_pagos_open(self, file_):
         datos = dict()
