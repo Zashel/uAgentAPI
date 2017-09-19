@@ -1,4 +1,4 @@
-import comtypes, comtypes.client
+﻿import comtypes, comtypes.client
 import queue
 import socket
 import subprocess
@@ -147,7 +147,7 @@ class _App:
         try:
             campaigns = _App.API.GetCampaigns()
             return [campaigns.Index(index).name for index in range(campaigns.Count)]
-        except comtypes.COMError:
+        except (comtypes.COMError, AttributeError):
             pass
 
     @property
@@ -185,7 +185,7 @@ class _App:
         if not campaign in self.campaigns:
             raise CampaignNotReadyError()
         _App.API.CampaignOpen(campaign)
-        _App. API.CampaignSignOn(campaign)
+        _App.API.CampaignSignOn(campaign)
 
     def campaign_set_not_ready(self, campaign, reason):
         '''
@@ -200,7 +200,6 @@ class _App:
         _App.AppAPI = comtypes.client.CreateObject(appapi)
         if _App.AppAPI.CanAttach():
             _App.API = _App.AppAPI.Attach(username, password)
-            _App.API = API
         #self.set_event_handler(handler)
 
     def login(self, *, instance=None, username=None, password=None, secureconnection=None,
@@ -221,10 +220,10 @@ class _App:
                 password = self.config.server["password"]
             else:
                 password = None
+        _App.API = comtypes.client.CreateObject(api)
         _App.AppAPI = comtypes.client.CreateObject(appapi)
         if _App.AppAPI.CanAttach():
             _App.API = _App.AppAPI.Attach(username, password)
-            _App.API = API
         else:
             _App.AppAPI.Exit()
             _App.AppAPI = None
@@ -263,7 +262,7 @@ class _App:
             _App.API.CleanUpAgent(True)
 
     def execute(self, sql, bind_list=tuple()):
-        sql = SqlParser(sql, bind_list)
+        sql = SqlParser(sql, bind_list, api=_App.API)
         # self.parsers.append(sql)
         return sql
 
@@ -351,8 +350,13 @@ class SqlParser(object):
     #                            #
     #############################
 
-    def __init__(self, sql, bind_list=tuple(), *, api=API):
-        self.API = api
+    def __init__(self, sql, bind_list=tuple(), *, app=None, api=None):
+        if api:
+            self.API = api
+        elif app:
+            self.API = app.API
+        else:
+            self.API = _App.API
         self._freezed = False
         self._count = int()
         self._tables = list()
@@ -1262,7 +1266,7 @@ class App():
         try:
             return self._app.__getattribute__(attribute)
         except ConnectionRefusedError:
-            open()
+            manager_open()
             time.sleep(2)
             return self._app.__getattribute__(attribute)
 
@@ -1283,7 +1287,7 @@ class App():
             data = self._manager.sqlparser(sql, bind_list)
             return App.SqlParser(data)
         except ConnectionRefusedError:
-            open()
+            manager_open()
             return self.execute(sql, bind_list)
 
     def shutdown(self):
@@ -1303,7 +1307,7 @@ if __name__ == "__main__":
         ProcessManager.register("app", lambda app=app: app)
         ProcessManager.register("api", lambda app=app: app.API)
         ProcessManager.register("user", lambda user=user: user)
-        ProcessManager.register("sqlparser", lambda *args, api=app.API: SqlParser(*args, api=api))
+        ProcessManager.register("sqlparser", lambda *args, app=app: SqlParser(*args, app=app))
         ProcessManager.register("queue", lambda manager_queue=manager_queue: manager_queue)
         ProcessManager.register("shutdown", lambda manager_queue=manager_queue: manager_queue.put("Shutdown"))
         processmanager = ProcessManager(address=("0.0.0.0", port), authkey=b"uAgentAPI.Wrapper")
