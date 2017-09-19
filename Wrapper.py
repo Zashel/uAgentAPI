@@ -129,6 +129,7 @@ class _App:
         #############################
 
     def __init__(self, path=None, *, pathclass=Path):
+        self.config = Config(path, pathclass)
         _App.API = comtypes.client.CreateObject(api)
         # self.parsers = list()
 
@@ -1244,6 +1245,7 @@ class App():
             return self._parser.get_where_clause()
 
     def __init__(self, path=None, *, pathclass=Path):
+        self.config = Config(path, pathclass) # We create a 'Config' object to access the configuration
         for x in range(5):
             try:
                 self._manager, self._port = get_manager()
@@ -1252,7 +1254,6 @@ class App():
                 time.sleep(x+0.5)
             else:
                 break
-        self._config = Config(path, pathclass)  # We create a 'Config' object to access the configuration
 
     def __getattribute__(self, attribute):
         return object.__getattribute__(self, attribute)
@@ -1268,10 +1269,6 @@ class App():
     @property
     def campaigns(self):
         return self._app.get_campaigns()
-
-    @property
-    def config(self):
-        return self._config
 
     @property
     def is_logged(self):
