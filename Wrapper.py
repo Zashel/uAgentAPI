@@ -1165,7 +1165,7 @@ def get_manager():
                 continue
 
 
-def open():
+def manager_open():
     args = [sys.executable] + [os.path.join(os.path.dirname(os.path.abspath(__file__)), "Wrapper.py")]
     new_environ = os.environ.copy()
     subprocess.Popen(args, env=new_environ,
@@ -1276,7 +1276,7 @@ class App():
 
     @staticmethod
     def open_server():
-        open()
+        manager_open()
 
     def execute(self, sql, bind_list=tuple()):
         try:
@@ -1324,4 +1324,4 @@ if __name__ == "__main__":
                     pass #TODO
         server.server_close()
 else:
-    open()
+    manager_open()
