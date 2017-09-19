@@ -163,6 +163,9 @@ class _App:
     def get_is_logged(self):
         return self.is_logged
 
+    def get_config(self):
+        return self.config
+
             #############################
             #                            #
             # App: Methods            1  #
