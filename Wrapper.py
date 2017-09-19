@@ -129,7 +129,6 @@ class _App:
         #############################
 
     def __init__(self, path=None, *, pathclass=Path):
-        self.config = Config(path, pathclass)  # We create a 'Config' object to access the configuration
         _App.API = comtypes.client.CreateObject(api)
         # self.parsers = list()
 
@@ -1253,6 +1252,7 @@ class App():
                 time.sleep(x+0.5)
             else:
                 break
+        self._config = Config(path, pathclass)  # We create a 'Config' object to access the configuration
 
     def __getattribute__(self, attribute):
         return object.__getattribute__(self, attribute)
@@ -1266,12 +1266,12 @@ class App():
             return self._app.__getattribute__(attribute)
 
     @property
-    def config(self):
-        return self._app.get_config()
-
-    @property
     def campaigns(self):
         return self._app.get_campaigns()
+
+    @property
+    def config(self):
+        return self._config
 
     @property
     def is_logged(self):
