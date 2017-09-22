@@ -1316,6 +1316,12 @@ if __name__ == "__main__":
         def start():
             server.serve_forever()
         start()
+        try:
+            from Updater import updater
+        except ImportError:
+            updater = None
+        if updater is not None:
+            updater.register(get_manager()[0])
         while True:
             try:
                 data = manager_queue.get() # Don't know if a Timeout is imperative now...
