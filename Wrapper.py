@@ -1199,7 +1199,21 @@ class App():
             self._iter_index = int()
 
         def __getitem__(self, item):
-            return App.SqlParser.Item(self._parser.get_item(item))
+            if isinstance(item, int):
+                if item < 0:
+                    item = len(self)+item
+                return App.SqlParser.Item(self._parser.get_item(item))
+            elif isinstance(item, slice):
+                if item.start is not None:
+                    init = item.start >= 0 and item.start or len(self)+item.start
+                else:
+                    init = 0
+                if item.stop is not None:
+                    end = item.stop >= 0 and item.stop or len(self)+item.stop
+                else:
+                    end = len(self)-1
+                step = item.step and item.step or 1
+                return [App.SqlParser.Item(self._parser.get_item(i)) for i in range(init, end, step)]
 
         def __iter__(self):
             self._iter_index = int()
@@ -1215,6 +1229,9 @@ class App():
                 return self[index]
             else:
                 raise StopIteration()
+
+        def __repr__(self):
+            return self[:]
 
         @property
         def count(self): #Deprecated
@@ -1260,12 +1277,17 @@ class App():
                 break
 
     def __getattribute__(self, attribute):
-        return object.__getattribute__(self, attribute)
+        try:
+            return object.__getattribute__(self, attribute)
+        except (ConnectionRefusedError, ConnectionResetError):
+            manager_open()
+            time.sleep(2)
+            return object.__getattribute__(self, attribute)
 
     def __getattr__(self, attribute):
         try:
             return self._app.__getattribute__(attribute)
-        except ConnectionRefusedError:
+        except (ConnectionRefusedError, ConnectionResetError):
             manager_open()
             time.sleep(2)
             return self._app.__getattribute__(attribute)
