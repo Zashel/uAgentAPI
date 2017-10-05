@@ -437,6 +437,8 @@ class SqlParser(object):
                 if page not in self.items:
                     data = self.fetch_page(page)
                     # item = Item(data, self.columns, subkey)
+                print(self._types)
+                print(key)
                 nndata = dict(self.items[page].set_row(key))
                 final_data = dict()
                 for key in nndata:
@@ -749,10 +751,18 @@ class SqlParser(object):
             final_columns = list()
             final_types = dict()
             table = str()
+            tables = re.findall(r"[from|join] ([\w\._\-]+) as ([\w\._\-]+)", sql)
+            tables = dict([(table[1], table[0]) for table in tables])
             for column in columns:
                 if "*" in column:
-                    table = re.findall(r"([\w]+)\.\*", column.lower())  # Revisar esto
-                    table_columns, types_dict = self.get_columns_names(table)
+                    table = re.findall(r"([\w]+)\.\*", column.lower()) # Revisar esto
+                    if table != list() and table[0] in tables:
+                        ttable = tables[table[0]]
+                    elif table != list():
+                        ttable = table
+                    else:
+                        ttable = re.findall(r"[from|join] ([\w\._\-]+)", sql)[0]
+                    table_columns, types_dict = self.get_columns_names(ttable)
                     for table in table_columns:
                         for col in table_columns[table]:
                             final_columns.append("{}.{}".format(self.tables[table], col))
@@ -766,7 +776,32 @@ class SqlParser(object):
                         '''
                 else:
                     if " as " in column:
-                        column = re.findall(r"(?<= as )([\w\._\-]+)", column)[-1]
+                        r_column, column = re.findall(r"([\w\._\-]+) as ([\w\._\-]+)", column)[0]
+                    else:
+                        r_column = column
+                    try:
+                        table = re.findall(r"([\w]+)\.", r_column.lower())[0]
+                    except IndexError:
+                        table = re.findall(r"[from|join] ([\w\._\-]+) ", sql)[0]
+                    if table in tables:
+                        ttable = tables[table]
+                    else:
+                        ttable = table
+                    if "dbo" in table:
+                        db, ttable = re.findall("([\w]+.)dbo.([\w]+)", table)[0]
+                    else:
+                        db = str()
+                    if "information_schema" not in sql:
+                        ccolumn = "." in r_column and r_column[len(table)+1:] or r_column
+                        ssql = "select data_type from {}information_schema.columns " \
+                               "where table_name='{}' and column_name='{}'".format(db, ttable, ccolumn)
+                            # print("Sql: {}".format(sql))
+                        sqlnames = SqlParser(ssql, api=self.API)
+                        print(db, ttable, ccolumn)
+                        pagina = sqlnames.fetch_page(1, False)
+                        final_types[column] = pagina.Index(0, 0) in DATA_TYPES and DATA_TYPES[pagina.Index(0, 0)] or str
+                    else:
+                        final_types[column] = str
                     final_columns.append(column)
 
             self._sql = self._sql.replace("*", ", ".join(final_columns))
@@ -777,11 +812,13 @@ class SqlParser(object):
         else:
             return (self.columns, self._types)
 
-    def get_columns_names(self, table_name=list()):
+    def get_columns_names(self, table_name=list()): # Aquí puedo liarla parda
         if table_name == list():
             table_name = [table for table in self.tables]
         final = dict()
         types = dict()
+        if isinstance(table_name, str):
+            table_name = [table_name]
         if not self.freezed:
             for table in table_name:
                 # print("Table: {}".format(table))
@@ -790,6 +827,7 @@ class SqlParser(object):
                     tabled = table
                     if "dbo" in table:
                         db, tabled = re.findall("([\w]+.)dbo.([\w]+)", table)[0]
+                    print(db, tabled)
                     sql = "select column_name, data_type from {}information_schema.columns where table_name='{}'".format(db,
                                                                                                               tabled)
                     # print("Sql: {}".format(sql))
@@ -1228,8 +1266,8 @@ def manager_open():
     args = [sys.executable] + [os.path.join(os.path.dirname(os.path.abspath(__file__)), "Wrapper.py")]
     new_environ = os.environ.copy()
     subprocess.Popen(args, env=new_environ,
-                     creationflags=0x08000000) # To hide console
-                     #creationflags=subprocess.CREATE_NEW_CONSOLE) # to watch console
+                     #creationflags=0x08000000) # To hide console
+                     creationflags=subprocess.CREATE_NEW_CONSOLE) # to watch console
     time.sleep(1)
 
 
