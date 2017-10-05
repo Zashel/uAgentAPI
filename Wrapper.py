@@ -1,4 +1,5 @@
 ﻿import comtypes, comtypes.client
+import datetime
 import queue
 import socket
 import subprocess
@@ -27,6 +28,36 @@ Altitude 8 uAgent Pythonised Wrapper for Transcom.
 
 HOST=socket.gethostbyname(socket.gethostname())
 PORT = 50005
+
+def strptime(data):
+    if data == "":
+        return data
+    elif data == "1900-01-01 00:00:00":
+        return ""
+    else:
+        try:
+            return datetime.datetime.strptime(data, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            try:
+                return datetime.datetime.strptime(data, "%Y-%m-%d")
+            except ValueError:
+                return data
+
+def to_float(data):
+    if data == "":
+        return data
+    else:
+        return float(data.replace(",", "."))
+def decimal(data):
+    if data == "":
+        return data
+    else:
+        return round(float(data.replace(",", ".")), 2)
+def to_int(data):
+    if data == "":
+        return data
+    else:
+        return int(data)
 
 class CampaignNotReadyError(Exception):
     pass
@@ -100,6 +131,14 @@ AppAPI = None
 MAX_API_ROWS = 50
 MAX_ROWS = MAX_API_ROWS
 
+DATA_TYPES = {"datetime": strptime,
+              "decimal": decimal,
+              "int": to_int,
+              "smallint": to_int,
+              "tinyint": to_int,
+              "varchar": str,
+              "float": to_float,
+              "real": to_float}
 
 #############################
 #                            #
@@ -361,6 +400,7 @@ class SqlParser(object):
         self._count = int()
         self._tables = list()
         self._columns = list()
+        self._types = dict()
         self._where = str()
         self._items = dict()
         self._index = dict()
@@ -397,9 +437,11 @@ class SqlParser(object):
                 if page not in self.items:
                     data = self.fetch_page(page)
                     # item = Item(data, self.columns, subkey)
-                    return dict(self.items[page].set_row(key))
-                else:
-                    return dict(self.items[page].set_row(key))
+                nndata = dict(self.items[page].set_row(key))
+                final_data = dict()
+                for key in nndata:
+                    final_data[key] = self._types[key](nndata[key])
+                return final_data
             except:
                 raise IndexError
         else:
@@ -610,7 +652,7 @@ class SqlParser(object):
             data = self.API.FetchSqlCursor(self.cursorSQL, inicial, MAX_ROWS)
             # print("Fetched {} rows in page {}".format(str(data.rowcount), str(page)))
             if save:
-                item = Item(data, self.columns, (page - 1) * MAX_ROWS, self.count)
+                item = Item(data, self.columns, (page - 1) * MAX_ROWS, self.count, self._types)
                 self._items[page] = item
             return data
         elif page in self.items:
@@ -632,7 +674,7 @@ class SqlParser(object):
                 total = fetched.RowCount
                 inicial += MAX_ROWS
                 if save:
-                    item = Item(fetched, self.columns, (page - 1) * MAX_ROWS, self.count)
+                    item = Item(fetched, self.columns, (page - 1) * MAX_ROWS, self.count, self._types)
                     self._items[page] = item
                 page += 1
                 yield fetched
@@ -705,14 +747,16 @@ class SqlParser(object):
                 print(columns)
                 raise
             final_columns = list()
+            final_types = dict()
             table = str()
             for column in columns:
                 if "*" in column:
                     table = re.findall(r"([\w]+)\.\*", column.lower())  # Revisar esto
-                    table_columns = self.get_columns_names(table)
+                    table_columns, types_dict = self.get_columns_names(table)
                     for table in table_columns:
                         for col in table_columns[table]:
                             final_columns.append("{}.{}".format(self.tables[table], col))
+                            final_types[final_columns[-1]] = types_dict[table][col]
                             '''
                             try:
                                 if col in final_columns: final_columns.append("{}.{}".format(table[0], col))
@@ -729,14 +773,15 @@ class SqlParser(object):
             if final_columns != list():
                 # self._sql = self._sql.replace("*", ", {}.".format(table).join(final_columns))
                 self._sql = self._sql.replace("*.{}".format(table), ", ".join(final_columns))
-            return final_columns
+            return (final_columns, final_types)
         else:
-            return self.columns
+            return (self.columns, self._types)
 
     def get_columns_names(self, table_name=list()):
         if table_name == list():
             table_name = [table for table in self.tables]
         final = dict()
+        types = dict()
         if not self.freezed:
             for table in table_name:
                 # print("Table: {}".format(table))
@@ -745,25 +790,29 @@ class SqlParser(object):
                     tabled = table
                     if "dbo" in table:
                         db, tabled = re.findall("([\w]+.)dbo.([\w]+)", table)[0]
-                    sql = "select column_name from {}information_schema.columns where table_name='{}'".format(db,
+                    sql = "select column_name, data_type from {}information_schema.columns where table_name='{}'".format(db,
                                                                                                               tabled)
                     # print("Sql: {}".format(sql))
                     sqlnames = SqlParser(sql, api=self.API)
                     names = list()
+                    typping = dict()
                     for x in range(sqlnames.pages):
                         pagina = sqlnames.fetch_page(x + 1, False)
                         for y in range(MAX_ROWS):
                             try:
                                 names.append(pagina.Index(y, 0))
+                                typo = pagina.Index(y, 1) in DATA_TYPES and DATA_TYPES[pagina.Index(y, 1)] or str
+                                typping[names[-1]] = typo
                             except:
                                 break
                     if table not in final:
                         final[table] = list()
                     final[table].extend(names)
+                    types[table] = typping
             # print("Total Columnas: {}".format(len(final)))
-            return final
+            return (final, types)
         else:
-            return self.columns
+            return (self.columns, self._types)
 
     def get_count(self):
         '''
@@ -774,7 +823,7 @@ class SqlParser(object):
                     "insert into " not in self.sql.lower() and
                     "update " not in self.sql.lower()):
             self._tables = SqlParser.get_tables(self.sql)
-            self._columns = self.get_columns(self.sql)
+            self._columns, self._types = self.get_columns(self.sql)
             self._where = SqlParser.get_where(self.sql)
             sql = self.sql
             if " order by " in sql:
@@ -947,7 +996,7 @@ class Config(configparser.ConfigParser):
 
 
 class Item(dict):
-    def __init__(self, fetched, column_list, row, total):
+    def __init__(self, fetched, column_list, row, total, typos):
         dict.__init__(self)
         self.fetched = fetched
         if column_list != list():
@@ -959,7 +1008,10 @@ class Item(dict):
         self.total = total
         self.row = row
         self._iter_index = 0
+        self.typos = typos
 
+    def __getitem__(self, item):
+        return self.typos[item](dict.__getitem__(self, item))
 
     def __getattr__(self, attribute):
         if attribute in self:
@@ -1006,6 +1058,9 @@ class Item(dict):
         self.clear()
         self.update(zip(self.item_column_list, data))
         return self
+
+    def get_typos(self):
+        return self.typos
 
         ##################
         #                 #
@@ -1179,7 +1234,7 @@ def manager_open():
 
 
 class App():
-    class SqlParser:
+    class SqlParser(list):
         class Item(dict):
             def __getattribute__(self, attribute):
                 return dict.__getattribute__(self, attribute)
@@ -1195,6 +1250,7 @@ class App():
                 raise AttributeError()
 
         def __init__(self, parser):
+            list.__init__(self)
             self._parser = parser
             self._iter_index = int()
 
@@ -1231,7 +1287,7 @@ class App():
                 raise StopIteration()
 
         def __repr__(self):
-            return self[:]
+            return self[:].__repr__()
 
         @property
         def count(self): #Deprecated
@@ -1286,7 +1342,7 @@ class App():
 
     def __getattr__(self, attribute):
         try:
-            return self._app.__getattribute__(attribute)
+            return object.__getattribute__(self, "_app").__getattribute__(attribute)
         except (ConnectionRefusedError, ConnectionResetError):
             manager_open()
             time.sleep(2)
