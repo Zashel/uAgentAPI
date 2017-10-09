@@ -444,8 +444,8 @@ class SqlParser(object):
                 for key in nndata:
                     final_data[key] = self._types[key](nndata[key])
                 return final_data
-            except:
-                raise IndexError
+            except KeyError:
+                return []
         else:
             raise IndexError("EOL")
 
@@ -753,62 +753,75 @@ class SqlParser(object):
             table = str()
             tables = re.findall(r"[from|join] ([\w\._\-]+) as ([\w\._\-]+)", sql)
             tables = dict([(table[1], table[0]) for table in tables])
-            for column in columns:
-                if "*" in column:
-                    table = re.findall(r"([\w]+)\.\*", column.lower()) # Revisar esto
-                    if table != list() and table[0] in tables:
-                        ttable = tables[table[0]]
-                    elif table != list():
-                        ttable = table
-                    else:
-                        ttable = re.findall(r"[from|join] ([\w\._\-]+)", sql)[0]
-                    table_columns, types_dict = self.get_columns_names(ttable)
-                    for table in table_columns:
-                        for col in table_columns[table]:
-                            final_columns.append("{}.{}".format(self.tables[table], col))
-                            final_types[final_columns[-1]] = types_dict[table][col]
+            if "select " in sql:
+                for column in columns:
+                    if "*" in column:
+                        table = re.findall(r"([\w]+)\.\*", column.lower()) # Revisar esto
+                        if table != list() and table[0] in tables:
+                            ttable = tables[table[0]]
+                        elif table != list():
+                            ttable = table
+                        else:
+                            ttable = re.findall(r"[from|join] ([\w\._\-]+)", sql)[0]
+                        table_columns, types_dict = self.get_columns_names(ttable)
+                        for table in table_columns:
+                            for col in table_columns[table]:
+                                final_columns.append("{}.{}".format(self.tables[table], col))
+                                final_types[final_columns[-1]] = types_dict[table][col]
+                                '''
+                                try:
+                                    if col in final_columns: final_columns.append("{}.{}".format(table[0], col))
+                                    else: final_columns.append(col)
+                                except:
+                                    raise
                             '''
+                    else:
+                        goon = True
+                        if " as " in column:
                             try:
-                                if col in final_columns: final_columns.append("{}.{}".format(table[0], col))
-                                else: final_columns.append(col)
-                            except:
-                                raise
-                        '''
-                else:
-                    if " as " in column:
-                        r_column, column = re.findall(r"([\w\._\-]+) as ([\w\._\-]+)", column)[0]
-                    else:
-                        r_column = column
-                    try:
-                        table = re.findall(r"([\w]+)\.", r_column.lower())[0]
-                    except IndexError:
-                        table = re.findall(r"[from|join] ([\w\._\-]+) ", sql)[0]
-                    if table in tables:
-                        ttable = tables[table]
-                    else:
-                        ttable = table
-                    if "dbo" in table:
-                        db, ttable = re.findall("([\w]+.)dbo.([\w]+)", table)[0]
-                    else:
-                        db = str()
-                    if "information_schema" not in sql:
-                        ccolumn = "." in r_column and r_column[len(table)+1:] or r_column
-                        ssql = "select data_type from {}information_schema.columns " \
-                               "where table_name='{}' and column_name='{}'".format(db, ttable, ccolumn)
-                            # print("Sql: {}".format(sql))
-                        sqlnames = SqlParser(ssql, api=self.API)
-                        print(db, ttable, ccolumn)
-                        pagina = sqlnames.fetch_page(1, False)
-                        final_types[column] = pagina.Index(0, 0) in DATA_TYPES and DATA_TYPES[pagina.Index(0, 0)] or str
-                    else:
-                        final_types[column] = str
-                    final_columns.append(column)
+                                r_column, column = re.findall(r"([\w\._\-]+) as ([\w\._\-]+)", column)[0]
+                            except IndexError:
+                                r_column = column.split(" as ")[1]
+                                column = r_column
+                        else:
+                            r_column = column
+                        try:
+                            table = re.findall(r"([\w]+)\.", r_column.lower())[0]
+                        except IndexError:
+                            try:
+                                table = re.findall(r"[from|join] ([\w\._\-]+) ", sql)[0]
+                            except IndexError:
+                                goon = False
+                        if goon is True:
+                            if table in tables:
+                                ttable = tables[table]
+                            else:
+                                ttable = table
+                            if "dbo" in table:
+                                db, ttable = re.findall("([\w]+.)dbo.([\w]+)", table)[0]
+                            else:
+                                db = str()
+                            if "information_schema" not in sql:
+                                ccolumn = "." in r_column and r_column[len(table)+1:] or r_column
+                                ssql = "select data_type from {}information_schema.columns " \
+                                       "where table_name='{}' and column_name='{}'".format(db, ttable, ccolumn)
+                                    # print("Sql: {}".format(sql))
+                                sqlnames = SqlParser(ssql, api=self.API)
+                                print(db, ttable, ccolumn)
+                                pagina = sqlnames.fetch_page(1, False)
+                                final_types[column] = pagina.Index(0, 0) in DATA_TYPES and DATA_TYPES[pagina.Index(0, 0)] or str
+                            else:
+                                final_types[column] = str
+                            final_columns.append(column)
+                        else:
+                            final_types[column] = str
+                            final_columns.append(column)
 
-            self._sql = self._sql.replace("*", ", ".join(final_columns))
-            if final_columns != list():
-                # self._sql = self._sql.replace("*", ", {}.".format(table).join(final_columns))
-                self._sql = self._sql.replace("*.{}".format(table), ", ".join(final_columns))
-            return (final_columns, final_types)
+                self._sql = self._sql.replace("*", ", ".join(final_columns))
+                if final_columns != list():
+                    # self._sql = self._sql.replace("*", ", {}.".format(table).join(final_columns))
+                    self._sql = self._sql.replace("*.{}".format(table), ", ".join(final_columns))
+                return (final_columns, final_types)
         else:
             return (self.columns, self._types)
 
