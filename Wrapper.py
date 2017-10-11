@@ -440,8 +440,8 @@ class SqlParser(object):
                 print(key)
                 nndata = dict(self.items[page].set_row(key))
                 final_data = dict()
-                for key in nndata:
-                    final_data[key] = self._types[key](nndata[key])
+                for kkey in nndata:
+                    final_data[kkey] = self._types[kkey](nndata[kkey])
                 return final_data
             except KeyError:
                 return []
