@@ -437,7 +437,6 @@ class SqlParser(object):
                 if page not in self.items:
                     data = self.fetch_page(page)
                     # item = Item(data, self.columns, subkey)
-                print(self._types)
                 print(key)
                 nndata = dict(self.items[page].set_row(key))
                 final_data = dict()
@@ -809,7 +808,10 @@ class SqlParser(object):
                                 sqlnames = SqlParser(ssql, api=self.API)
                                 print(db, ttable, ccolumn)
                                 pagina = sqlnames.fetch_page(1, False)
-                                final_types[column] = pagina.Index(0, 0) in DATA_TYPES and DATA_TYPES[pagina.Index(0, 0)] or str
+                                try:
+                                    final_types[column] = pagina.Index(0, 0) in DATA_TYPES and DATA_TYPES[pagina.Index(0, 0)] or str
+                                except comtypes.COMError:
+                                    final_types[column] = str
                             else:
                                 final_types[column] = str
                             final_columns.append(column)
