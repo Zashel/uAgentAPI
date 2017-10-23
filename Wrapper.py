@@ -159,6 +159,7 @@ class _App:
     '''
     API = API
     AppAPI = AppAPI
+    INSTANCE = None
 
         #############################
         #                            #
@@ -170,7 +171,10 @@ class _App:
     def __init__(self, path=None, *, pathclass=Path):
         self.config = Config(path, pathclass)
         _App.API = comtypes.client.CreateObject(api)
-        # self.parsers = list()
+        _App.INSTANCE = self
+        self.historic_events = list()
+        self.historic_phones = list()
+        self.last_phone = None 
 
     def __del__(self):
         self.logout()
@@ -195,15 +199,26 @@ class _App:
             return _App.API.GetAgentLoginName()
         except:
             return False
+        
+    ##### GET Properties #####
 
     def get_campaigns(self):
         return self.campaigns
+    
+    def get_config(self):
+        return self.config
+    
+    def get_historic_events(self):
+        return self.historic_events
+    
+    def get_historic_phones(self):
+        return self.historic_phones
 
     def get_is_logged(self):
         return self.is_logged
-
-    def get_config(self):
-        return self.config
+        
+    def get_last_phone(self):
+        return self.last_phone
 
             #############################
             #                            #
@@ -239,10 +254,12 @@ class _App:
         _App.AppAPI = comtypes.client.CreateObject(appapi)
         if _App.AppAPI.CanAttach():
             _App.API = _App.AppAPI.Attach(username, password)
-        #self.set_event_handler(handler)
+        if handler is None:
+            handler = DefaultEventHandler()
+        self.set_event_handler(handler)
 
     def login(self, *, instance=None, username=None, password=None, secureconnection=None,
-              setcontext=True, site=None, team=None, extension=None):
+              setcontext=True, site=None, team=None, extension=None, handler=None):
         global API, AppAPI
         '''
         First we validate if uAgent is Logged and, if it is true, attach to it.
@@ -290,7 +307,9 @@ class _App:
                     self.set_login_context(site=site, team=team, extension=extension)
                 except:
                     raise
-        #self.set_event_handler(DefaultEventHandler())
+        if handler is None:
+            handler = DefaultEventHandler()
+        self.set_event_handler(handler)
 
     def logout(self):
         # for sql in self.parsers:
@@ -1210,7 +1229,19 @@ class DefaultEventHandler(object):
         pass
 
     def SessionPhoneEvent(self, this, sessionID, data):
-        pass
+        now = datetime.datetime.now()
+        phone = _App.API.GetPhoneInfo(sessionID)
+        _App.INSTANCE.historic_events.append({"SesionPhoneEvent":
+                                                 {"DestinationNumber": data.DestinationNumber,
+                                                  "DestinationUserName": data.DestinationUserName,
+                                                  "IsRecording": data.IsRecording,
+                                                  "PhoneState": data.PhoneState,
+                                                  "RecordingTerminationReason": data.RecordingTerminationReason,
+                                                  "Time": now}})
+        _App.INSTANCE.historic_phones.append({"Number": phone.PrimaryParticipants.Index(1).Number,
+                                             "Time": now})
+        if phone.PrimaryParticipants.Index(1).Number:
+            _App.INSTANCE.last_phone = phone.PrimaryParticipants.Index(1).Number
 
     def SessionPhoneProgressEvent(self, this, sessionID, data):
         pass
@@ -1466,3 +1497,4 @@ if __name__ == "__main__":
         server.server_close()
 else:
     manager_open()
+
