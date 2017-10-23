@@ -1374,7 +1374,7 @@ class App():
             return self[:].__repr__()
 
         @property
-        def count(self): #Deprecated
+        def count(self): #Legacy
             return self._parser.do_count()
 
         @property
@@ -1437,8 +1437,20 @@ class App():
         return self._app.get_campaigns()
 
     @property
+    def historic_events(self):
+        return self._app.get_historic_events()
+
+    @property
+    def historic_phones(self):
+        return self._app.get_historic_phones()
+
+    @property
     def is_logged(self):
         return self._app.get_is_logged()
+
+    @property
+    def last_phone(self):
+        return self._app.get_last_phone()
 
     @staticmethod
     def open_server():
