@@ -1,7 +1,7 @@
 ﻿'''
-Altitude 8 uAgent Pythonised Wrapper for Transcom.
+Altitude 8 uAgent Pythonised Wrapper.
 
-Made by Iván Uría
+Made by Iván Uría & Roberto Cabezuelo
 '''
 
 import comtypes, comtypes.client
@@ -20,7 +20,7 @@ from comtypes.gen.Altitude_uAgentWin_Engine_Control import uAgentEngineControl8 
 from comtypes.gen.Altitude_uAgentWin_Application_API import uAgentWindowsApplicationAPI8 as appapi
 from threading import Thread
 from zashel.utils import daemonize
-from comtypes.gen.Altitude_uAgentWin_API import uAgentAPIEvents, UAAttributeList, UAAttribute, UAByteList
+from comtypes.gen.Altitude_uAgentWin_API import uAgentAPIEvents, UAAttributeList, UAAttribute, UAByteList, UAExtendPurpose_Unknown
 from multiprocessing import Pipe
 from multiprocessing.managers import BaseManager
 import configparser
@@ -360,14 +360,34 @@ class _App:
             #############################
 
     # Phone Methods
+    def answer(self, sessionID):
+        """
+        Answers an interaction
+        :param sessionID: SessionID of opened session
+        :return: None
+        """
+        self.session_id = _App.API.Answer(sessionID)
+
+    def extend(self, extension, campaign=""):
+        """
+        Extends a phone call to another agent.
+        :param extension: Extension to extend the phone call.
+        :return: None
+        """
+        self.session_id = _App.API.PhoneExtend(self.session_id, "", "{}".format(extension), campaign,
+                                               "", "", False, False,
+                                               comtypes.client.CreateObject(UAAttributeList),
+                                               comtypes.client.CreateObject(UAByteList),
+                                               UAExtendPurpose_Unknown # 3
+                                               )
 
     def call(self, number):
         """
-        Calls directly specified number.
+        Calls directly specified number.exit
         :param number: Number to call to.
         :return: None.
         """
-        self.session_id = _App.API.GlobalPhoneDial("{}".format(str(number)), "", "")
+        self.session_id = _App.API.GlobalPhoneDial("{}".format(str(number)), "","")
 
     def call_direct(self, number):
         """
@@ -420,7 +440,7 @@ class _App:
         :return: None
         """
         _App.API.SessionPhoneDial(self.session_id, "={}".format(str(number)), "", "", True,
-                                  False, True, comtypes.client.CreateObject(UAAttributeList),
+                                  False, False, comtypes.client.CreateObject(UAAttributeList),
                                   comtypes.client.CreateObject(UAByteList), media)
 
     def retrieve(self):
@@ -510,10 +530,16 @@ class _App:
         :return: None
         """
         if _App.AppAPI is not None:
-            if _App.API.CanExit():
-                _App.API.Exit()
+            _App.AppAPI.Exit()
+            _App.AppAPI = None
         _App.AppAPI = comtypes.client.CreateObject(appapi)
-        _App.API = _App.AppAPI.Login(instance, username, password, secureconnection)
+        try:
+            _App.API = _App.AppAPI.Login(instance, username, password, secureconnection)
+        except comtypes.COMError:
+            if _App.AppAPI and _App.AppAPI.CanExit():
+                _App.AppAPI.Exit()
+                _App.AppAPI = None
+            raise PermissionError()
         if setcontext:
             self.set_login_context(site=site, team=team, extension=extension)
         handler = DefaultEventHandler()
@@ -609,8 +635,7 @@ class _App:
             # ¿Para qué esperar?
             if setcontext:
                 self.set_login_context(site=site, team=team, extension=extension)
-        if handler is None:
-            handler = DefaultEventHandler()
+        handler = DefaultEventHandler()
         self.set_event_handler(handler)
 
     def logout(self):
@@ -618,29 +643,9 @@ class _App:
         Logs out on uAgent Instance.
         :return: None.
         """
-        if _App.AppAPI and _App.AppAPI.CanDetach():
-            _App.AppAPI.Detach()
-        else:
-            _App.API.CleanUpAgent(True)
+        _App.API.CleanUpAgent(True)
         if _App.AppAPI and _App.AppAPI.CanExit():
             _App.AppAPI.Exit()
-
-    def send_data(self, agent, campaign, messages):
-        """
-        Sends data to specified agent logged in specified campaign.
-        :param agent: Agent name to send data to.
-        :param campaign: Campaign name in which agent is logged in.
-        :param messages: Dictionary of messages to send to agent.
-        :return: None.
-        """
-        assert isinstance(messages, dict)
-        attributes = comtypes.client.CreateObject(UAAttributeList)
-        for key in messages:
-            attr = comtypes.client.CreateObject(UAAttribute)
-            attr.Name = key
-            attr.Value = messages[key]
-            attributes.Add(attr)
-        _App.API.SendData(agent, campaign, attributes)
 
     def execute(self, sql, bind_list=tuple()):
         """
@@ -737,23 +742,69 @@ class _App:
         :return: PhoneInfo
         """
         phone = _App.API.GetPhoneInfo(sessionID)
-        data = {"Acd": phone.Acd,
-                "CallKey": phone.CallKey,
-                "DialedNumber": phone.DialedNumber,
-                "Dnis": phone.Dnis,
-                "IsRecording": phone.IsRecording,
-                "Number": phone.Number,
-                "PrimaryParticipants": phone.PrimaryParticipants,
-                "SecondaryParticipants": phone.SecondaryParticipants,
-                "State": phone.State}
+        phone_data = {"Acd": phone.Acd,
+                      "CallKey": phone.CallKey,
+                      "DialedNumber": phone.DialedNumber,
+                      "Dnis": phone.Dnis,
+                      "IsRecording": phone.IsRecording,
+                      "Number": phone.Number,
+                      "PrimaryParticipants": phone.PrimaryParticipants,
+                      "SecondaryParticipants": phone.SecondaryParticipants,
+                      "State": phone.State}
         for key in ("PrimaryParticipants", "SecondaryParticipants"):
             items = list()
-            for x in range(data[key].Count):
-                items.append({"Name": data[key].Index(x).Name,
-                              "Number": data[key].Index(x).Number,
-                              "Type": data[key].Index(x).Type})
-            data[key] = items
-        return data
+            for x in range(phone_data[key].Count):
+                items.append({"Name": phone_data[key].Index(x).Name,
+                              "Number": phone_data[key].Index(x).Number,
+                              "Type": phone_data[key].Index(x).Type})
+            phone_data[key] = items
+        return phone_data
+
+    def GetSessionInfo(self, sessionID):
+        """
+        Returns an object of type dict with the data associated to a session.
+        :param sessionID: SessionID of opened session
+        :return: SessionInfo
+        """
+        session = _App.API.GetSessionInfo(sessionID)
+        return {"Campaign": session.Campaign,
+                "HasContactLoaded": session.HasContactLoaded,
+                "HasDataTransaction": session.HasDataTransaction,
+                "HasVoice": session.HasVoice,
+                "IsAlerting": session.IsAlerting,
+                "IsDelivered": session.IsDelivered,
+                "IsRecording": session.IsRecording,
+                "PhoneState": session.PhoneState,
+                "ScriptOnAlerting": session.ScriptOnAlerting,
+                "SessionType": session.SessionType
+                }
+
+    def PhoneSendDigits(self, sessionID, digits):
+        """
+        Sends Digits as DTMF Tones
+        :param digits: String to send
+        :return: None
+        """
+        _App.API.PhoneSendDigits(sessionID, digits)
+
+    def SendData(self, agent, campaign, messages):
+        """
+        Sends data to specified agent logged in specified campaign.
+        :param agent: Agent name to send data to.
+        :param campaign: Campaign name in which agent is logged in.
+        :param messages: Dictionary of messages to send to agent.
+        :return: None.
+        """
+        assert isinstance(messages, dict)
+        attributes = comtypes.client.CreateObject(UAAttributeList)
+        for key in messages:
+            """
+            attr = comtypes.client.CreateObject(UAAttribute)
+            attr.Name = key
+            attr.Value = messages[key]
+            attributes.Add(attr)""" # Curiously, it wasn't needed.
+            attributes.add(key, messages[key]) # It does everything by itself.
+        _App.API.SendData(agent, campaign, attributes)
 
 
             ################    ####  ###  #      ###   ###   ###   ####  ####  ###
@@ -1088,6 +1139,7 @@ class SqlParser(object):
         :param bind_list: List of items to replace "?" with.
         :return: parsed sql with securely replaced items.
         """
+        sql = sql.replace("\r\n", " ")
         sql = sql.replace("\n", " ")
         sql = sql.replace(";", "")
         sql_pieces = sql.split("?")
@@ -1837,16 +1889,19 @@ class DefaultEventHandler(object):
         pass
 
     def SessionPhoneEvent(self, this, sessionID, data):
+        _App.INSTANCE.session_id = sessionID
         now = datetime.datetime.now()
         print(sessionID)
-        phone = _App.INSTANCE.GetPhoneInfo(sessionID)
+        phone_data = _App.INSTANCE.GetPhoneInfo(sessionID)
+        session_info = _App.INSTANCE.GetSessionInfo(sessionID)
         final = {"SesionPhoneEvent": {"DestinationNumber": data.DestinationNumber,
                                       "DestinationUserName": data.DestinationUserName,
                                       "IsRecording": data.IsRecording,
                                       "PhoneState": data.PhoneState,
                                       "RecordingTerminationReason": data.RecordingTerminationReason,
                                       "Time": now,
-                                      "PhoneInfo": phone}}
+                                      "PhoneInfo": phone_data,
+                                      "SessionInfo": session_info}}
         DefaultEventHandler.send_pipe(("SessionPhoneEvent", [sessionID, final]))
 
     def SessionPhoneProgressEvent(self, this, sessionID, data):
