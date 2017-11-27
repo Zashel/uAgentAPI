@@ -240,6 +240,7 @@ class _App:
         self.historic_phones = list()
         self.last_phone = None
         self.session_id = None
+        self.prepared = False
 
     def __del__(self):
         """
@@ -529,10 +530,8 @@ class _App:
         :param extension: Extension in site to connect telephony to.
         :return: None
         """
-        if _App.AppAPI is not None:
-            _App.AppAPI.Exit()
-            _App.AppAPI = None
-        _App.AppAPI = comtypes.client.CreateObject(appapi)
+        while not self.prepare:
+            time.sleep(1)
         try:
             _App.API = _App.AppAPI.Login(instance, username, password, secureconnection)
         except comtypes.COMError:
@@ -657,6 +656,16 @@ class _App:
         sql = SqlParser(sql, bind_list, api=_App.API)
         # self.parsers.append(sql)
         return sql
+
+    def prepare_opening(self):
+        def go(self):
+            self.prepare = False
+            if _App.AppAPI is not None:
+                _App.AppAPI.Exit()
+                _App.AppAPI = None
+            _App.AppAPI = comtypes.client.CreateObject(appapi)
+            self.prepare = True
+        Thread(target=go, args=[self], daemon=True).start()
 
         #############################
         #                            #
@@ -1820,7 +1829,8 @@ class DefaultEventHandler(object):
         pass
 
     def CampaignFeatureEvent(self, this, campaign, featureInvokedType):
-        pass
+        requests = ["Unknown", "Ready", "NotReady", "SignOn", "SignOff", "Open", "Close"]
+        DefaultEventHandler.send_pipe(("CampaignFeatureEvent", [campaign, requests[featureInvokedType]]))
 
     def CampaignSuspended(self, this, campaign):
         pass
@@ -1841,7 +1851,14 @@ class DefaultEventHandler(object):
         pass
 
     def SessionContactLoadedEvent(self, this, sessionID, data):
-        pass
+        _App.INSTANCE.session_id = sessionID
+        print("Contact loaded Event")
+        final = {"SessionContactLoadedEvent": {"AgentName": data.AgentName,
+                                              "Campaign": data.Campaign,
+                                              "ContactID": data.ContactID,
+                                              "Moment": data.Moment
+                                              }}
+        DefaultEventHandler.send_pipe(("SessionContactLoadedEvent", [sessionID, final]))
 
     def SessionContactProfileUpdatedEvent(self, this, sessionID, data):
         pass
@@ -1894,14 +1911,15 @@ class DefaultEventHandler(object):
         print(sessionID)
         phone_data = _App.INSTANCE.GetPhoneInfo(sessionID)
         session_info = _App.INSTANCE.GetSessionInfo(sessionID)
-        final = {"SesionPhoneEvent": {"DestinationNumber": data.DestinationNumber,
+        final = {"SessionPhoneEvent": {"DestinationNumber": data.DestinationNumber,
                                       "DestinationUserName": data.DestinationUserName,
                                       "IsRecording": data.IsRecording,
                                       "PhoneState": data.PhoneState,
                                       "RecordingTerminationReason": data.RecordingTerminationReason,
                                       "Time": now,
                                       "PhoneInfo": phone_data,
-                                      "SessionInfo": session_info}}
+                                      "SessionInfo": session_info
+                                      }}
         DefaultEventHandler.send_pipe(("SessionPhoneEvent", [sessionID, final]))
 
     def SessionPhoneProgressEvent(self, this, sessionID, data):
